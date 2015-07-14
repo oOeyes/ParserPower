@@ -51,8 +51,4 @@ class ParserPowerCompare {
     return strcasecmp( $string2, $string1 );
   }
 }
-
-
 ?>
-
-

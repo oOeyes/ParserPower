@@ -17,14 +17,14 @@
 if( !defined( 'MEDIAWIKI' ) ) die( 'Invalid entry point.' );
 
 // Extension credits.
-$wgExtensionCredits[ 'other' ][] = array(
+$wgExtensionCredits[ 'parserhook' ][] = array(
   'name'           => 'ParserPower',
   'url'            => 'http://sw.aeongarden.com/wiki/Extension:ParserPower', 
   'description'    => 'A collection of extended parser functions for MediaWiki, particularly including functions for '.
                       'dealing with lists of values separated by a dynamically-specified delimiter.',
   'descriptionmsg' => 'parserpower-desc',
   'author'         => '[http://www.mediawiki.org/wiki/User:OoEyes Shawn Bruckner]',
-  'version'        => '0.9',
+  'version'        => '0.95',
 );
 
 /**

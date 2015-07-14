@@ -25,7 +25,7 @@ class ParserPowerLists {
   const SORT_NCS = 0;
   
   /**
-   * Flag for case insensitive sorting. 0 as this is a default mode, and ignored in numeric sorts.
+   * Flag for case sensitive sorting. 0 as this is a default mode, and ignored in numeric sorts.
    */
   const SORT_CS = 2;
   
@@ -40,36 +40,90 @@ class ParserPowerLists {
   const SORT_DESC = 1;
   
   /**
+   * Flag for case insensitive item removal. 0 as this is a default mode.
+   */
+  const REMOVE_NCS = 0;
+  
+  /**
+   * Flag for case insensitive item removal.
+   */
+  const REMOVE_CS = 1;
+  
+  /**
    * Registers the list handling parser functions with the parser.
    * @param Parser $parser The parser object being initialized.
    */
   static public function setup( &$parser ) {
-    $parser->setFunctionHook( 'MAG_LSTSEP', 
+    $parser->setFunctionHook( 'lstcnt', 
+                              'ParserPowerLists::lstcntRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstsep', 
                               'ParserPowerLists::lstsepRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_LSTUNIQ', 
+    $parser->setFunctionHook( 'lstfnd', 
+                              'ParserPowerLists::lstfndRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstapp', 
+                              'ParserPowerLists::lstappRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstprep', 
+                              'ParserPowerLists::lstprepRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstjoin', 
+                              'ParserPowerLists::lstjoinRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstcntuniq', 
+                              'ParserPowerLists::lstcntuniqRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'listunique', 
+                              'ParserPowerLists::listuniqueRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstuniq', 
                               'ParserPowerLists::lstuniqRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_LISTSORT', 
+    $parser->setFunctionHook( 'listfilter', 
+                              'ParserPowerLists::listfilterRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstfltr', 
+                              'ParserPowerLists::lstfltrRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstrm', 
+                              'ParserPowerLists::lstrmRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'listsort', 
                               'ParserPowerLists::listsortRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_LSTSRT', 
+    $parser->setFunctionHook( 'lstsrt', 
                               'ParserPowerLists::lstsrtRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_LISTMAP', 
+    $parser->setFunctionHook( 'listmap', 
                               'ParserPowerLists::listmapRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_LSTMAP', 
+    $parser->setFunctionHook( 'lstmap', 
                               'ParserPowerLists::lstmapRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_LSTMAPTEMP', 
+    $parser->setFunctionHook( 'lstmaptemp', 
                               'ParserPowerLists::lstmaptempRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'listmerge', 
+                              'ParserPowerLists::listmergeRender', 
                               SFH_OBJECT_ARGS 
                             );
   }
@@ -109,7 +163,30 @@ class ParserPowerLists {
   }
   
   /**
-   * This function directs the delimiter replacement option for the lstsep function.
+   * This function directs the counting operation for the lstcnt function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstcntRender( $parser, $frame, $params ) {
+    $list = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $sep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+      
+      $sep = $parser->mStripState->unstripNoWiki( $sep );
+      
+      $count = count( self::arrayTrimUnescape( self::explodeList( $sep, $list ) ) );
+      return Array( $count, 'noparse' => false );
+      
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function directs the delimiter replacement operation for the lstsep function.
    * @param Parser $parser The parser object. Ignored.
    * @param PPFrame $frame The parser frame object.
    * @param Array $params The parameters and values together, not yet expanded or trimmed.
@@ -133,6 +210,698 @@ class ParserPowerLists {
   }
   
   /**
+   * This function directs the delimiter replacement operation for the lstfnd function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstfndRender( $parser, $frame, $params ) {
+    $list = isset( $params[1] ) ? trim( $frame->expand( $params[1] ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $item = isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( $params[0] ) ) ) : '';
+      $sep = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : ',';
+      $csOption = isset ( $params[3] ) ? 
+                  strtolower( trim( $frame->expand( $params[3] ) ) ) : 'ncs';
+      
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      
+      $values = self::arrayTrimUnescape( self::explodeList( $sep, $list ) );
+      if ( $csOption === "cs" ) {
+        foreach ( $values as $value ) {
+          if ( $value === $item ) {
+            return Array( $value, 'noparse' => false );
+          }
+        }
+      } else {
+        foreach ( $values as $value ) {
+          if ( strtolower( $value ) === strtolower( $item ) ) {
+            return Array( $value, 'noparse' => false );
+          }
+        }
+      }
+      return Array( implode( $outSep, $values ), 'noparse' => false );
+      
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function directs the append operation for the lstapp function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstappRender( $parser, $frame, $params ) {
+    $list = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    $value = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : '';
+    
+    if ( $list !== '' ) {
+      $sep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+      
+      $sep = $parser->mStripState->unstripNoWiki( $sep );
+      
+      $values = self::arrayTrimUnescape( self::explodeList( $sep, $list ) );
+      if ( $value !== '' ) {
+        $values[] = $value;
+      }
+      return Array( implode( $sep, $values ), 'noparse' => false );
+      
+    } else {
+      return Array( $value, 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function directs the prepend operation for the lstprep function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstprepRender( $parser, $frame, $params ) {
+    $value = isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( $params[0] ) ) ) : '';
+    $list = isset( $params[2] ) ? trim( $frame->expand( $params[2] ) ) : '';
+    
+    if ( $list !== '' ) {
+      $sep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+      
+      $sep = $parser->mStripState->unstripNoWiki( $sep );
+      
+      $values = self::arrayTrimUnescape( self::explodeList( $sep, $list ) );
+      if ( $value !== '' ) {
+        array_unshift( $values, $value );
+      }
+      return Array( implode( $sep, $values ), 'noparse' => false );
+      
+    } else {
+      return Array( $value, 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function directs the joining operation for the lstjoin function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstjoinRender( $parser, $frame, $params ) {
+    $inList1 = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    $inList2 = isset( $params[2] ) ? trim( $frame->expand( $params[2] ) ) : '';
+    
+    if ( $inList1 !== '' || $inList2 !== '' ) {
+      if ( $inList1 !== '' ) {
+        $inSep1 = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+        
+        $inSep1 = $parser->mStripState->unstripNoWiki( $inSep1 );
+        
+        $values1 = self::arrayTrimUnescape( self::explodeList( $inSep1, $inList1 ) );
+      } else {
+        $values1 = array();
+      }
+      
+      if ( $inList2 !== '' ) {
+        $inSep2 = isset( $params[3] ) ? ParserPower::unescape( trim( $frame->expand( $params[3] ) ) ) : '';
+        
+        $inSep2 = $parser->mStripState->unstripNoWiki( $inSep2 );
+        
+        $values2 = self::arrayTrimUnescape( self::explodeList( $inSep2, $inList2 ) );
+      } else {
+        $values2 = array();
+      }
+      $outSep = isset( $params[4] ) ? ParserPower::unescape( trim( $frame->expand( $params[4] ) ) ) : '';
+      
+      return Array( implode( $outSep, array_merge( $values1, $values2 ) ), 'noparse' => false );
+      
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * Replaces the indicated token in the pattern with the input value.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters.
+   * @param String $token The token to replace.
+   * @param String $pattern Pattern containing token to be replaced with the input value.
+   * @return The result of the token replacement within the pattern.
+   */
+  static private function applyPattern( $parser, $frame, $inValue, $token, $pattern ) {
+    $inValue = trim( $inValue );
+    
+    if ( $inValue != '' ) {
+      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
+      $outValue = str_replace( $token, $inValue, $outValue );
+      $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
+      return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
+    }
+  }
+  
+  /**
+   * Breaks the input value into fields and then replaces the indicated tokens in the pattern with those field values.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters
+   * @param String $fieldSep The delimiter separating the fields in the value.
+   * @param Array $tokens The list of tokens to replace.
+   * @param int $tokenCount The number of tokens.
+   * @param String $pattern Pattern containing tokens to be replaced by field values.
+   * @return The result of the token replacement within the pattern.
+   */
+  static private function applyFieldPattern( $parser, 
+                                             $frame, 
+                                             $inValue,
+                                             $fieldSep,
+                                             $tokens, 
+                                             $tokenCount, 
+                                             $pattern 
+                                           ) {
+    $inValue = trim( $inValue );
+    
+    if ( $inValue != '' ) {
+      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
+      $fields = explode( $fieldSep, $inValue, $tokenCount );
+      $fieldCount = count( $fields );
+      for ( $i = 0; $i < $tokenCount; $i++ ) {
+        $outValue = str_replace( $tokens[$i], ( $i < $fieldCount ) ? $fields[$i] : '', $outValue );
+      }
+      $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
+      return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
+    }
+  }
+  
+  /**
+   * Turns the input value into one or more template parameters, processes the templates with those parameters, and
+   * returns the result.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters.
+   * @param String $template The template to pass the parameters to.
+   * @param String $fieldSep The delimiter separating the parameter values.
+   * @return The result of the template.
+   */
+  static private function applyTemplate( $parser, $frame, $inValue, $template, $fieldSep ) {
+    $inValue = trim( $inValue );
+    if ( $inValue != '' ) {
+      if ( $fieldSep === '' ) {
+        $outValue = $frame->virtualBracketedImplode( '{{', '|', '}}', $template, '1=' . $inValue );
+      } else {
+        $inFields = explode( $fieldSep, $inValue );
+        $outFields = Array();
+        $outFields[] = $template;
+        for ( $i = 0; $i < count( $inFields ); $i++ ) {
+          $outFields[] = ( $i + 1 ) . '=' . $inFields[$i];
+        }
+        $outValue = $frame->virtualBracketedImplode( '{{', '|', '}}', $outFields );
+      }
+      if ( $outValue instanceof PPNode_Hash_Array ) {
+        $outValue = $outValue->value;
+      }
+      return $parser->replaceVariables( implode( '', $outValue ), $frame );
+    }
+  }
+  
+  /**
+   * This function performs the filtering operation for the listfiler function when done by value inclusion.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $inValues Array with the input values.
+   * @param String $values The list of values to include, not yet exploded.
+   * @param String $valueSep The delimiter separating the values to include.
+   * @param bool $valueCS true to match in a case-sensitive manner, false to match in a case-insensitive manner
+   * @return Array The function output along with relevant parser options.
+   */
+  static private function filterListByInclusion( $inValues, $values, $valueSep, $valueCS ) {
+      if ( $valueSep !== '' ) {
+        $includeValues = self::arrayTrimUnescape( self::explodeList( $valueSep, $values ) );
+      } else {
+        $includeValues = Array( ParserPower::unescape( trim( $values ) ) );
+      }
+      
+      $outValues = Array();
+      
+      if ( $valueCS ) {
+        foreach ( $inValues as $inValue ) {
+          if ( in_array( $inValue, $includeValues ) === true ) {
+            $outValues[] = $inValue;
+          }
+        }
+      } else {
+        $includeValues = array_map( 'strtolower', $includeValues );
+        foreach ( $inValues as $inValue ) {
+          if ( in_array( strtolower( $inValue ), $includeValues ) === true ) {
+            $outValues[] = $inValue;
+          }
+        }
+      }
+      
+      return $outValues;
+  }
+  
+  /**
+   * This function performs the filtering operation for the listfiler function when done by value exclusion.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $inValues Array with the input values.
+   * @param String $values The list of values to exclude, not yet exploded.
+   * @param String $valueSep The delimiter separating the values to exclude.
+   * @param bool $valueCS true to match in a case-sensitive manner, false to match in a case-insensitive manner
+   * @return Array The function output along with relevant parser options.
+   */
+  static private function filterListByExclusion( $inValues, $inSep, $values, $valueSep, $valueCS ) {
+    if ( $valueSep !== '' ) {
+      $excludeValues = self::arrayTrimUnescape( self::explodeList( $valueSep, $values ) );
+    } else {
+      $excludeValues = Array( ParserPower::unescape( trim( $values ) ) );
+    }
+
+    $outValues = Array();
+
+    if ( $valueCS ) {
+      foreach ( $inValues as $inValue ) {
+        if ( in_array( $inValue, $excludeValues ) === false ) {
+          $outValues[] = $inValue;
+        }
+      }
+    } else {
+      $excludeValues = array_map( 'strtolower', $excludeValues );
+      foreach ( $inValues as $inValue ) {
+        if ( in_array( strtolower( $inValue ), $excludeValues ) === false ) {
+          $outValues[] = $inValue;
+        }
+      }
+    }
+
+    return $outValues; 
+  }
+  
+  /**
+   * This function performs the filtering operation for the listfilter function when done by pattern.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValues Array with the input values.
+   * @param String $fieldSep Separator between fields, if any.
+   * @param String $token The token(s) in the pattern that represents where the list value should go.
+   * @param String $tokenSep The separator between tokens if used.
+   * @param String $pattern The pattern of text containing token that list values are inserted into at that token.
+   * @return Array The function output along with relevant parser options.
+   */
+  static private function filterFromListByPattern( $parser, 
+                                                   $frame, 
+                                                   $inValues,
+                                                   $fieldSep,
+                                                   $token, 
+                                                   $tokenSep,
+                                                   $pattern
+                                                 ) {
+    $outValues = Array();
+    if ( $fieldSep !== '' && $tokenSep !== '' ) {
+      $tokens = explode( $tokenSep, $token );
+      $tokenCount = count( $tokens );
+      foreach ( $inValues as $value ) {
+        $result = self::applyFieldPattern( $parser, $frame, $value, $fieldSep, $tokens, $tokenCount, $pattern );
+        $result = strtolower( $parser->replaceVariables( ParserPower::unescape( trim( $result ) ), $frame ) );
+        if ( $value != '' && $result !== "remove" ) {
+          $outValues[] = $value;
+        }
+      }
+    } else {
+      foreach ( $inValues as $value ) {
+        $result = self::applyPattern( $parser, $frame, $value, $token, $pattern );
+        $result = $parser->replaceVariables( ParserPower::unescape( $result ), $frame );
+        if ( $value != '' && strtolower( $result ) !== "remove" ) {
+          $outValues[] = $value;
+        }
+      }
+    }
+
+    return $outValues;
+  }
+  
+  /**
+   * This function performs the filtering operation for the listfilter function when done by template.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValues Array with the input values.
+   * @param String $template The template to use.
+   * @param String $fieldSep Separator between fields, if any.
+   * @return Array The array stripped of any values with non-unique keys.
+   */
+  static private function filterFromListByTemplate( $parser, $frame, $inValues, $template, $fieldSep ) {
+    $outValues = Array();
+    foreach ( $inValues as $value ) {
+      $result = self::applyTemplate( $parser, $frame, $value, $template, $fieldSep );
+      if ( $value != '' && strtolower( $result ) !== "remove" ) {
+        $outValues[] = $value;
+      }
+    }
+
+    return $outValues;
+  }
+  
+  /**
+   * This function renders the listfilter function, sending it to the appropriate processing function based on what
+   * parameter values are provided.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function listfilterRender( $parser, $frame, $params ) {
+    $params = ParserPower::arrangeParams( $frame, $params );
+    
+    $inList = isset( $params["list"] ) ? trim( $frame->expand( $params["list"] ) ) : '';
+    $default = isset( $params["default"] ) ? ParserPower::unescape( trim( $frame->expand( $params["default"] ) ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $keepValues = isset( $params["keep"] ) ? trim( $frame->expand( $params["keep"] ) ) : '';
+      $keepSep = isset( $params["keepsep"] ) ? trim( $frame->expand( $params["keepsep"] ) ) : ',';
+      $keepCS = isset( $params["keepcs"] ) ? 
+                strtolower( trim( $frame->expand( $params["keepcs"] ) ) ) : 
+                'no';
+      $removeValues = isset( $params["remove"] ) ? trim( $frame->expand( $params["remove"] ) ) : '';
+      $removeSep = isset( $params["removesep"] ) ? trim( $frame->expand( $params["removesep"] ) ) : ',';
+      $removeCS = isset( $params["removecs"] ) ? 
+                  strtolower( trim( $frame->expand( $params["removecs"] ) ) ) : 
+                  'no';
+      $template = isset( $params["template"] ) ? trim( $frame->expand( $params["template"] ) ) : '';
+      $inSep = isset( $params["insep"] ) ? ParserPower::unescape( trim( $frame->expand( $params["insep"] ) ) ) : ',';
+      $fieldSep = isset( $params["fieldsep"] ) ? 
+                  ParserPower::unescape( trim( $frame->expand( $params["fieldsep"] ) ) ) : '';
+      $token = isset( $params["token"] ) ? 
+               ParserPower::unescape( trim( $frame->expand( $params["token"], 
+                                      PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                    ) : 'x';
+      $tokenSep = isset( $params["tokensep"] ) ? 
+                  ParserPower::unescape( trim( $frame->expand( $params["tokensep"] ) ) ) : ',';
+      $pattern = isset( $params["pattern"] ) ? $params["pattern"] : 'x';
+      $outSep = isset( $params["outsep"] ) ? 
+                ParserPower::unescape( trim( $frame->expand( $params["outsep"] ) ) ) : ', ';
+      $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
+      $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
+      
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      $valueSep = $parser->mStripState->unstripNoWiki( $valueSep );
+      
+      $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
+      
+      if ( $keepValues !== '' ) {
+        $outValues = self::filterListByInclusion( $inValues, 
+                                                  $keepValues, 
+                                                  $keepSep, 
+                                                  ( $keepCS === "yes" )
+                                                );
+      } else if ( $removeValues !== '' ) {
+        $outValues = self::filterListByExclusion( $inValues,
+                                                  $removeValues, 
+                                                  $removeSep, 
+                                                  ( $removeCS === "yes" )
+                                                );
+      } else if ( $template !== '' ) {
+        $outValues = self::filterFromListByTemplate( $parser, $frame, $inValues, $template, $fieldSep );
+      } else {
+        $outValues = self::filterFromListByPattern( $parser, 
+                                                    $frame, 
+                                                    $inValues, 
+                                                    $fieldSep,
+                                                    $token, 
+                                                    $tokenSep,
+                                                    $pattern
+                                                  );
+      }
+      
+      if ( count( $outValues ) > 0 ) {
+        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+      } else {
+        return Array( $default, 'noparse' => false );
+      }
+    } else {
+      return Array( $default, 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function renders the lstfltr function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstfltrRender( $parser, $frame, $params ) {
+    $params = ParserPower::arrangeParams( $frame, $params );
+    
+    $inList = isset( $params[2] ) ? trim( $frame->expand( $params[2] ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $values = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+      $valueSep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : ',';
+      $inSep = isset( $params[3] ) ? ParserPower::unescape( trim( $frame->expand( $params[3] ) ) ) : ',';
+      $outSep = isset( $params[4] ) ? 
+                ParserPower::unescape( trim( $frame->expand( $params[4] ) ) ) : ', ';
+      $csOption = isset ( $params[5] ) ? 
+                  strtolower( trim( $frame->expand( $params[5] ) ) ) : 'ncs';
+      
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      
+      $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
+      
+      $outValues = self::filterListByInclusion( $inValues,
+                                                $values, 
+                                                $valueSep, 
+                                                ( $csOption === "cs" )
+                                              );
+      
+      if ( count( $outValues ) > 0 ) {
+        return Array( implode( $outSep, $outValues ), 'noparse' => false );
+      } else {
+        return Array( '', 'noparse' => false );
+      }
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function renders the lstrm function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstrmRender( $parser, $frame, $params ) {
+    $params = ParserPower::arrangeParams( $frame, $params );
+    
+    $inList = isset( $params[1] ) ? trim( $frame->expand( $params[1] ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $value = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+      $inSep = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : ',';
+      $outSep = isset( $params[3] ) ? 
+                ParserPower::unescape( trim( $frame->expand( $params[3] ) ) ) : ', ';
+      $csOption = isset ( $params[4] ) ? 
+                  strtolower( trim( $frame->expand( $params[4] ) ) ) : 'ncs';
+      
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      
+      $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
+      
+      $outValues = self::filterListByExclusion( $inValues, 
+                                                $inSep, 
+                                                $value, 
+                                                '', 
+                                                ( $csOption === "cs" )
+                                              );
+      
+      if ( count( $outValues ) > 0 ) {
+        return Array( implode( $outSep, $outValues ), 'noparse' => false );
+      } else {
+        return Array( '', 'noparse' => false );
+      }
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function reduces an array to unique values.
+   * @param Array $values The array of values to reduce to unique values.
+   * @param bool $valueCS true to determine uniqueness case-sensitively, false to determine it case-insensitively
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function reduceToUniqueValues( $values, $valueCS ) {
+    if ( $valueCS ) {
+      return array_unique( $values );
+    } else {
+      return array_intersect_key( $values, array_unique( array_map( "strtolower", $values ) ) );
+    }
+  }
+  
+  /**
+   * This function directs the counting operation for the lstcntuniq function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstcntuniqRender( $parser, $frame, $params ) {
+    $list = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $sep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+      $csOption = isset ( $params[2] ) ? 
+                  strtolower( trim( $frame->expand( $params[2] ) ) ) : 'ncs';
+      
+      $sep = $parser->mStripState->unstripNoWiki( $sep );
+      
+      $values = self::arrayTrimUnescape( self::explodeList( $sep, $list ) );
+      $values = self::reduceToUniqueValues( $values, $csOption === "cs" );
+      return Array( strval( count( $values ) ), 'noparse' => false );
+      
+    } else {
+      return Array( '0', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * Generates keys by replacing tokens in a pattern with the fields in the values, excludes any value that generates
+   * any key generated by the previous values, and returns an array of the nonexcluded values.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $inValues The input list.
+   * @param String $fieldSep Separator between fields, if any.
+   * @param String $token The token in the pattern that represents where the list value should go.
+   * @param Array $tokens Or if there are mulitple fields, the tokens representing where they go.
+   * @param String $pattern The pattern of text containing token that list values are inserted into at that token.
+   * @return Array An array with only values that generated unique keys via the given pattern.
+   */
+  static private function reduceToUniqueValuesByKeyPattern( $parser,
+                                                            $frame,
+                                                            $inValues,
+                                                            $fieldSep,
+                                                            $token,
+                                                            $tokens,
+                                                            $pattern
+                                                          ) {
+    $previousKeys = Array();
+    $outValues = Array();
+    if ( ( isset( $tokens ) && is_array( $tokens ) ) ) {
+      $tokenCount = count( $tokens );
+      foreach ( $inValues as $value ) {
+        $key = self::applyFieldPattern( $parser, $frame, $value, $fieldSep, $tokens, $tokenCount, $pattern );
+        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+        if ( !in_array( $key, $previousKeys ) ) {
+          $previousKeys[] = $key;
+          $outValues[] = $value;
+        }
+      }
+    } else {
+      foreach ( $inValues as $value ) {
+        $key = self::applyPattern( $parser, $frame, $value, $token, $pattern );
+        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+        if ( !in_array( $key, $previousKeys ) ) {
+          $previousKeys[] = $key;
+          $outValues[] = $value;
+        }
+      }
+    }
+    
+    return $outValues;
+  }
+  
+  /**
+   * Generates keys by turning the input value into one or more template parameters and processing that template, 
+   * excludes any value that generates any key generated by the previous values, and returns an array of the 
+   * nonexcluded values.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $inValues The input list.
+   * @param String $fieldSep Separator between fields, if any.
+   * @return Array An array with only values that generated unique keys via the given pattern.
+   */
+  static private function reduceToUniqueValuesByKeyTemplate( $parser, $frame, $inValues, $template, $fieldSep ) {
+    $previousKeys = Array();
+    $outValues = Array();
+    foreach ( $inValues as $value ) {
+      $key = self::applyTemplate( $parser, $frame, $value, $template, $fieldSep );
+      if ( !in_array( $key, $previousKeys ) ) {
+        $previousKeys[] = $key;
+        $outValues[] = $value;
+      }
+    }
+    
+    return $outValues;
+  }
+  
+  /**
+   * This function renders the listunique function, sending it to the appropriate processing function based on what
+   * parameter values are provided.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function listuniqueRender( $parser, $frame, $params ) {
+    $params = ParserPower::arrangeParams( $frame, $params );
+    
+    $inList = isset( $params["list"] ) ? trim( $frame->expand( $params["list"] ) ) : '';
+    $default = isset( $params["default"] ) ? ParserPower::unescape( trim( $frame->expand( $params["default"] ) ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $uniqueCS = isset ( $params["uniquecs"] ) ? 
+                  strtolower( trim( $frame->expand( $params["uniquecs"] ) ) ) : 'no';
+      $template = isset( $params["template"] ) ? trim( $frame->expand( $params["template"] ) ) : '';
+      $inSep = isset( $params["insep"] ) ? ParserPower::unescape( trim( $frame->expand( $params["insep"] ) ) ) : ',';
+      $fieldSep = isset( $params["fieldsep"] ) ? 
+                  ParserPower::unescape( trim( $frame->expand( $params["fieldsep"] ) ) ) : '';
+      $token = isset( $params["token"] ) ? 
+               ParserPower::unescape( trim( $frame->expand( $params["token"], 
+                                      PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                    ) : '';
+      $tokenSep = isset( $params["tokensep"] ) ? 
+                  ParserPower::unescape( trim( $frame->expand( $params["tokensep"] ) ) ) : ',';
+      $pattern = isset( $params["pattern"] ) ? $params["pattern"] : '';
+      $outSep = isset( $params["outsep"] ) ? 
+                ParserPower::unescape( trim( $frame->expand( $params["outsep"] ) ) ) : ', ';
+      $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
+      $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
+      
+      $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
+      
+      if ( $fieldSep !== '' && $tokenSep !== '' ) {
+        $tokens = explode( $tokenSep, $token );
+      }
+      
+      if ( $template !== '' ) {
+        $outValues = self::reduceToUniqueValuesByKeyTemplate( $parser, 
+                                                              $frame, 
+                                                              $inValues, 
+                                                              $template,
+                                                              $fieldSep
+                                                            );
+      } else if ( $token !== '' && $pattern !== '' ) {
+        $outValues = self::reduceToUniqueValuesByKeyPattern( $parser, 
+                                                             $frame, 
+                                                             $inValues, 
+                                                             $fieldSep,
+                                                             $token, 
+                                                             isset( $tokens ) ? $tokens : null,
+                                                             $pattern
+                                                           );
+      } else {
+        $outValues = self::reduceToUniqueValues( $inValues, $uniqueCS === "yes" );
+      }
+      return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+    } else {
+      return Array( $default, 'noparse' => false );
+    }
+  }
+  
+  /**
    * This function directs the duplicate removal function for the lstuniq function.
    * @param Parser $parser The parser object. Ignored.
    * @param PPFrame $frame The parser frame object.
@@ -145,11 +914,13 @@ class ParserPowerLists {
     if ( $inList !== '' ) {
       $inSep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
       $outSep = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : '';
+      $csOption = isset ( $params[3] ) ? 
+                  strtolower( trim( $frame->expand( $params[3] ) ) ) : 'ncs';
       
       $inSep = $parser->mStripState->unstripNoWiki( $inSep );
       
       $values = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
-      $values = array_unique( $values );
+      $values = self::reduceToUniqueValues( $values, $csOption === "cs" );
       return Array( implode( $outSep, $values ), 'noparse' => false );
       
     } else {
@@ -219,90 +990,6 @@ class ParserPowerLists {
   }
   
   /**
-   * Replaces the indicated token in the pattern with the input value.
-   * @param Parser $parser The parser object.
-   * @param PPFrame $frame The parser frame object.
-   * @param String $inValue The value to change into one or more template parameters.
-   * @param String $token The token to replace.
-   * @param String $pattern Pattern containing token to be replaced with the input value.
-   * @return The result of the token replacement within the pattern.
-   */
-  static private function applyPattern( $parser, $frame, $inValue, $token, $pattern ) {
-    $inValue = trim( $inValue );
-    
-    if ( $inValue != '' ) {
-      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
-      $outValue = str_replace( $token, $inValue, $outValue );
-      $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
-      return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
-    }
-  }
-  
-  /**
-   * Breaks the input value into fields and then replaces the indicated tokens in the pattern with those field values.
-   * @param Parser $parser The parser object.
-   * @param PPFrame $frame The parser frame object.
-   * @param String $inValue The value to change into one or more template parameters
-   * @param String $fieldSep The delimiter separating the fields in the value.
-   * @param Array $tokens The list of tokens to replace.
-   * @param int $tokenCount The number of tokens.
-   * @param String $pattern Pattern containing tokens to be replaced by field values.
-   * @return The result of the token replacement within the pattern.
-   */
-  static private function applyFieldPattern( $parser, 
-                                               $frame, 
-                                               $inValue,
-                                               $fieldSep,
-                                               $tokens, 
-                                               $tokenCount, 
-                                               $pattern 
-                                             ) {
-    $inValue = trim( $inValue );
-    
-    if ( $inValue != '' ) {
-      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
-      $fields = explode( $fieldSep, $inValue, $tokenCount );
-      $fieldCount = count( $fields );
-      for ( $i = 0; $i < $tokenCount; $i++ ) {
-        $outValue = str_replace( $tokens[$i], ( $i < $fieldCount ) ? $fields[$i] : '', $outValue );
-      }
-      $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
-      return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
-    }
-  }
-  
-  /**
-   * Turns the input value into one or more template parameters, processes the templates with those parameters, and
-   * returns the result.
-   * @param Parser $parser The parser object.
-   * @param PPFrame $frame The parser frame object.
-   * @param String $inValue The value to change into one or more template parameters.
-   * @param String $template The template to pass the parameters to.
-   * @param String $fieldSep The delimiter separating the parameter values.
-   * @return The result of the template.
-   */
-  static private function applyTemplate( $parser, $frame, $inValue, $template, $fieldSep ) {
-    $inValue = trim( $inValue );
-    if ( $inValue != '' ) {
-      if ( $fieldSep === '' ) {
-        $outValue = $frame->virtualBracketedImplode( '{{', '|', '}}', $template, '1=' . $inValue );
-      } else {
-        $inFields = explode( $fieldSep, $inValue );
-        $outFields = Array();
-        $outFields[] = $template;
-        for ( $i = 0; $i < count( $inFields ); $i++ ) {
-          $outFields[] = ( $i + 1 ) . '=' . $inFields[$i];
-        }
-        $outValue = $frame->virtualBracketedImplode( '{{', '|', '}}', $outFields );
-      }
-      if ( $outValue instanceof PPNode_Hash_Array ) {
-        $outValue = $outValue->value;
-      }
-      return $parser->replaceVariables( implode( '', $outValue ), $frame );
-    }
-  }
-  
-  /**
    * Generates the sort keys by replacing tokens in a pattern with the fields in the values. This returns an array
    * of the values where each element is an array with the sort key in element 0 and the value in element 1.
    * @param Parser $parser The parser object.
@@ -315,31 +1002,26 @@ class ParserPowerLists {
    * @return Array An array where each value has been paired with a sort key in a two-element array.
    */
   static private function generateSortKeysByPattern( $parser,
-                                                        $frame,
-                                                        $values,
-                                                        $fieldSep,
-                                                        $token,
-                                                        $tokens,
-                                                        $pattern
-                                                      ) {
+                                                     $frame,
+                                                     $values,
+                                                     $fieldSep,
+                                                     $token,
+                                                     $tokens,
+                                                     $pattern
+                                                   ) {
     $pairedValues = Array();
     if ( ( isset( $tokens ) && is_array( $tokens ) ) ) {
       $tokenCount = count( $tokens );
       foreach ( $values as $value ) {
-        $pairedValues[] = Array( self::applyFieldPattern( $parser, 
-                                                          $frame, 
-                                                          $value, 
-                                                          $fieldSep, 
-                                                          $tokens, 
-                                                          $tokenCount, 
-                                                          $pattern
-                                                        ),
-                                 $value,
-                               );
+        $key = self::applyFieldPattern( $parser, $frame, $value, $fieldSep, $tokens, $tokenCount, $pattern );
+        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+        $pairedValues[] = Array( $key, $value );
       }
     } else {
       foreach ( $values as $value ) {
-        $pairedValues[] = Array( self::applyPattern( $parser, $frame, $value, $token, $pattern ) );
+        $key = self::applyPattern( $parser, $frame, $value, $token, $pattern );
+        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+        $pairedValues[] = Array( $key, $value );
       }
     }
     
@@ -413,17 +1095,17 @@ class ParserPowerLists {
    * @return Array An array where each value has been paired with a sort key in a two-element array.
    */
   static private function sortListByKeys( $parser,
-                                            $frame,
-                                            $values,
-                                            $template,
-                                            $fieldSep,
-                                            $token,
-                                            $tokens,
-                                            $pattern,
-                                            $sortOptions,
-                                            $subsort,
-                                            $subsortOptions
-                                          ) {
+                                          $frame,
+                                          $values,
+                                          $template,
+                                          $fieldSep,
+                                          $token,
+                                          $tokens,
+                                          $pattern,
+                                          $sortOptions,
+                                          $subsort,
+                                          $subsortOptions
+                                        ) {
     if ( $template !== '' ) {
       $pairedValues = self::generateSortKeysByTemplate( $parser, $frame, $values, $template, $fieldSep );
     } else {
@@ -451,6 +1133,7 @@ class ParserPowerLists {
     $params = ParserPower::arrangeParams( $frame, $params );
     
     $inList = isset( $params["list"] ) ? trim( $frame->expand( $params["list"] ) ) : '';
+    $default = isset( $params["default"] ) ? ParserPower::unescape( trim( $frame->expand( $params["default"] ) ) ) : '';
     
     if ( $inList !== '' ) {
       $template = isset( $params["template"] ) ? trim( $frame->expand( $params["template"] ) ) : '';
@@ -472,6 +1155,8 @@ class ParserPowerLists {
       $subsortOptions = isset( $params["subsortoptions"] ) ? trim( $frame->expand( $params["subsortoptions"] ) ) : '';
       $duplicates = isset ( $params["duplicates"] ) ? 
                     strtolower( trim( $frame->expand( $params["duplicates"] ) ) ) : 'keep';
+      $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
+      $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
       
       $inSep = $parser->mStripState->unstripNoWiki( $inSep );
       
@@ -502,9 +1187,14 @@ class ParserPowerLists {
         $values = array_filter( self::explodeList( $inSep, $inList ), "ParserPower::isEmpty" );
         $values = self::sortList( $values, $sortOptions );
       }
-      return Array( implode( $outSep, $values ), 'noparse' => false );
+      
+      if ( count( $values ) > 0 ) {
+        return Array( $intro . implode( $outSep, $values ) . $outro, 'noparse' => false );
+      } else {
+        return Array( $default, 'noparse' => false );
+      }
     } else {
-      return Array( '', 'noparse' => false );
+      return Array( $default, 'noparse' => false );
     }
   }
 
@@ -535,11 +1225,12 @@ class ParserPowerLists {
   }
   
   /**
-   * This function performs the sort option for the listm function.
+   * This function performs the pattern changing operation for the listmap function.
    * @param Parser $parser The parser object.
    * @param PPFrame $frame The parser frame object.
    * @param String $inList The input list.
    * @param String $inSep The delimiter seoarating values in the input list.
+   * @param String $fieldSep The optional delimiter seoarating fields in each value.
    * @param String $token The token(s) in the pattern that represents where the list value should go.
    * @param String $tokenSep The separator between tokens if used.
    * @param String $pattern The pattern of text containing token that list values are inserted into at that token.
@@ -547,31 +1238,37 @@ class ParserPowerLists {
    * @param String $sortMode A string indicating what sort mode to use, if any.
    * @param String $sortOptions A string of options for the sort as handled by #listsort.
    * @param String $duplicates When to strip duplicate values, if at all.
+   * @param String $intro Content to include before outputted list values, only if at least one item is output.
+   * @param String $outro Content to include after outputted list values, only if at least one item is output.
+   * @param String $default Content to output if no list values are.
    * @return Array The function output along with relevant parser options.
    */
   static private function applyPatternToList( $parser, 
-                                                $frame, 
-                                                $inList, 
-                                                $inSep,
-                                                $fieldSep,
-                                                $token, 
-                                                $tokenSep,
-                                                $pattern, 
-                                                $outSep, 
-                                                $sortMode, 
-                                                $sortOptions,
-                                                $duplicates
-                                              ) {
+                                              $frame, 
+                                              $inList, 
+                                              $inSep,
+                                              $fieldSep,
+                                              $token, 
+                                              $tokenSep,
+                                              $pattern, 
+                                              $outSep, 
+                                              $sortMode, 
+                                              $sortOptions,
+                                              $duplicates,
+                                              $intro,
+                                              $outro,
+                                              $default
+                                            ) {
     if ( $inList !== '' ) {
       $inSep = $parser->mStripState->unstripNoWiki( $inSep );
       
       $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
       
-      if ( $duplicates == 'strip' || $duplicates == 'prestrip' ) {
+      if ( $duplicates == 'prestrip' || $duplicates == 'pre/postsort' ) {
         $inValues = array_unique( $inValues );
       }
       
-      if ( $sortMode == 'sort' || $sortMode == 'presort' ) {
+      if ( $sortMode == 'presort' || $sortMode == 'pre/postsort' ) {
         $inValues = self::sortList( $inValues, $sortOptions );
       }
       
@@ -594,17 +1291,22 @@ class ParserPowerLists {
         }
       }
       
-      if ( $duplicates == 'strip' || $duplicates == "poststrip" ) {
+      if ( $duplicates == 'strip' || $duplicates == 'poststrip' || $duplicates == 'pre/postsort' ) {
         $outValues = array_unique( $outValues );
       }
       
-      if ( $sortMode == 'sort' || $sortMode == 'postsort' ) {
+      if ( $sortMode == 'sort' || $sortMode == 'postsort' || $sortMode == 'pre/postsort' ) {
         $outValues = self::sortList( $outValues, $sortOptions );
       }
-      return Array( implode( $outSep, $outValues ), 'noparse' => false );
+      
+      if ( count( $outValues ) > 0 ) {
+        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+      } else {
+        return Array( $default, 'noparse' => false );
+      }
       
     } else {
-      return Array( '', 'noparse' => false );
+      return Array( $default, 'noparse' => false );
     }
   }
   
@@ -615,32 +1317,39 @@ class ParserPowerLists {
    * @param String $inList The input list.
    * @param String $template The template to use.
    * @param String $inSep The delimiter seoarating values in the input list.
+   * @param String $fieldSep The optional delimiter seoarating fields in each value.
    * @param String $outSep The delimiter that should separate values in the output list.
    * @param String $sortMode A string indicating what sort mode to use, if any.
    * @param String $sortOptions A string of options for the sort as handled by #listsort.
    * @param String $duplicates When to strip duplicate values, if at all.
+   * @param String $intro Content to include before outputted list values, only if at least one item is output.
+   * @param String $outro Content to include after outputted list values, only if at least one item is output.
+   * @param String $default Content to output if no list values are.
    * @return Array The function output along with relevant parser options.
    */
   static private function applyTemplateToList( $parser, 
-                                                 $frame, 
-                                                 $inList,
-                                                 $template,
-                                                 $inSep,
-                                                 $fieldSep,
-                                                 $outSep,
-                                                 $sortMode,
-                                                 $sortOptions,
-                                                 $duplicates
-                                               ) {
+                                               $frame, 
+                                               $inList,
+                                               $template,
+                                               $inSep,
+                                               $fieldSep,
+                                               $outSep,
+                                               $sortMode,
+                                               $sortOptions,
+                                               $duplicates,
+                                               $intro,
+                                               $outro,
+                                               $default
+                                             ) {
     if ( $inList !== '' ) {
       $inSep = $parser->mStripState->unstripNoWiki( $inSep );
       
       $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
-      if ( $duplicates == 'strip' || $duplicates == 'prestrip' ) {
+      if ( $duplicates == 'prestrip' || $duplicates == 'pre/postsort' ) {
         $inValues = array_unique( $inValues );
       }
       
-      if ( $sortMode == 'sort' || $sortMode == 'presort' ) {
+      if ( $sortMode == 'presort' || $sortMode == 'pre/postsort' ) {
         $inValues = self::sortList( $inValues, $sortOptions );
       }
       
@@ -649,17 +1358,22 @@ class ParserPowerLists {
         $outValues[] = self::applyTemplate( $parser, $frame, $inValue, $template, $fieldSep );
       }
       
-      if ( $sortMode == 'postsort' ) {
+      if ( $sortMode == 'sort' || $sortMode == 'postsort' || $sortMode == 'pre/postsort' ) {
         $outValues = self::sortList( $outValues, $sortOptions );
       }
       
-      if ( $duplicates == 'strip' || $duplicates == "poststrip" ) {
+      if ( $duplicates == 'strip' || $duplicates == 'poststrip' || $duplicates == 'pre/postsort' ) {
         $outValues = array_unique( $outValues );
       }
-      return Array( implode( $outSep, $outValues ), 'noparse' => false );
+      
+      if ( count( $outValues ) > 0 ) {
+        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+      } else {
+        return Array( $default, 'noparse' => false );
+      }
       
     } else {
-      return Array( '', 'noparse' => false );
+      return Array( $default, 'noparse' => false );
     }
   }
   
@@ -675,6 +1389,7 @@ class ParserPowerLists {
     $params = ParserPower::arrangeParams( $frame, $params );
     
     $inList = isset( $params["list"] ) ? trim( $frame->expand( $params["list"] ) ) : '';
+    $default = isset( $params["default"] ) ? ParserPower::unescape( trim( $frame->expand( $params["default"] ) ) ) : '';
     
     if ( $inList !== '' ) {
       $template = isset( $params["template"] ) ? trim( $frame->expand( $params["template"] ) ) : '';
@@ -695,6 +1410,8 @@ class ParserPowerLists {
       $sortOptions = isset( $params["sortoptions"] ) ? trim( $frame->expand( $params["sortoptions"] ) ) : '';
       $duplicates = isset ( $params["duplicates"] ) ? 
                     strtolower( trim( $frame->expand( $params["duplicates"] ) ) ) : 'keep';
+      $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
+      $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
       
       if ( $template !== '' ) {
         return self::applyTemplateToList( $parser, 
@@ -706,7 +1423,10 @@ class ParserPowerLists {
                                           $outSep, 
                                           $sortMode, 
                                           $sortOptions,
-                                          $duplicates
+                                          $duplicates,
+                                          $intro,
+                                          $outro,
+                                          $default
                                         );
       } else {
         return self::applyPatternToList( $parser, 
@@ -720,11 +1440,14 @@ class ParserPowerLists {
                                          $outSep, 
                                          $sortMode, 
                                          $sortOptions,
-                                         $duplicates
+                                         $duplicates,
+                                         $intro,
+                                         $outro,
+                                         $default
                                        );
       }
     } else {
-      return Array( '', 'noparse' => false );
+      return Array( $default, 'noparse' => false );
     }
   }
   
@@ -759,6 +1482,9 @@ class ParserPowerLists {
                                        $outSep, 
                                        $sortMode, 
                                        $sortOptions,
+                                       '',
+                                       '',
+                                       '',
                                        ''
                                      );
     } else {
@@ -792,10 +1518,359 @@ class ParserPowerLists {
                                         $outSep, 
                                         $sortMode, 
                                         $sortOptions,
+                                        '',
+                                        '',
+                                        '',
                                         ''
                                       );
     } else {
       return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * Breaks the input values into fields and then replaces the indicated tokens in the pattern with those field values.
+   * This is for special cases when two sets of replacements are necessary for a given pattern.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue1 The first value to (potentially) split and replace tokens with
+   * @param String $inValue2 The second value to (potentially) split and replace tokens with
+   * @param String $fieldSep The delimiter separating the fields in the value.
+   * @param Array $tokens1 The list of tokens to replace when performing the replacement for $inValue1.
+   * @param Array $tokens2 The list of tokens to replace when performing the replacement for $inValue2.
+   * @param String $pattern Pattern containing tokens to be replaced by field (or unsplit) values.
+   * @return The result of the token replacement within the pattern.
+   */
+  static private function applyTwoSetFieldPattern( $parser, 
+                                                   $frame, 
+                                                   $inValue1,
+                                                   $inValue2,
+                                                   $fieldSep,
+                                                   $tokens1, 
+                                                   $tokens2,
+                                                   $pattern 
+                                                 ) {
+    $inValue1 = trim( $inValue1 );
+    $inValue2 = trim( $inValue2 );
+    $tokenCount1 = count( $tokens1 );
+    $tokenCount2 = count( $tokens2 );
+    
+    if ( $inValue1 != '' && $inValue2 != '' ) {
+      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
+      if ( $inValue1 != '' ) {
+        $fields = explode( $fieldSep, $inValue1, $tokenCount1 );
+        $fieldCount = count( $fields );
+        for ( $i = 0; $i < $tokenCount1; $i++ ) {
+          $outValue = str_replace( $tokens1[$i], ( $i < $fieldCount ) ? $fields[$i] : '', $outValue );
+        }
+      }
+      if ( $inValue2 != '' ) {
+        $fields = explode( $fieldSep, $inValue2, $tokenCount2 );
+        $fieldCount = count( $fields );
+        for ( $i = 0; $i < $tokenCount2; $i++ ) {
+          $outValue = str_replace( $tokens2[$i], ( $i < $fieldCount ) ? $fields[$i] : '', $outValue );
+        }
+      }
+      $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
+      return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
+    }
+  }
+  
+  /**
+   * Turns the input value into one or more template parameters, processes the templates with those parameters, and
+   * returns the result.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue1 The first value to change into one or more template parameters.
+   * @param String $inValue2 The second value to change into one of more template parameters.
+   * @param String $template The template to pass the parameters to.
+   * @param String $fieldSep The delimiter separating the parameter values.
+   * @return The result of the template.
+   */
+  static private function applyTemplateToTwoValues( $parser, $frame, $inValue1, $inValue2, $template, $fieldSep ) {
+    return self::applyTemplate( $parser, $frame, $inValue1 . $fieldSep . $inValue2, $template, $fieldSep );
+  }
+  
+  /**
+   * This function performs repeated merge passes until either the input array is merged to a single value, or until
+   * a merge pass is completed that does not perform any further merges (pre- and post-pass array count is the same).
+   * Each merge pass operates by performing a conditional on all possible pairings of items, immediately merging two
+   * if the conditional indicates it should and reducing the possible pairings. The logic for the conditional and
+   * the actual merge process is supplied through a user-defined function. 
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $inValues The input values, should be already exploded and fully preprocessed.
+   * @param String $applyFunction Valid name of the function to call for both match and merge processes.
+   * @param Array $matchParams An array of parameter values for the matching process, with open spots for the values.
+   * @param Array $mergeParams An array of parameter values for the merging process, with open spots for the values.
+   * @param int $valueIndex1 The index in $matchParams and $mergeParams where the first value is to go.
+   * @param int $valueIndex2 The index in $matchParams and $mergeParams where the second value is to go.
+   * @return Array The function output along with relevant parser options.
+   */
+  static private function iterativeListMerge( $parser, 
+                                              $frame,  
+                                              $inValues,  
+                                              $applyFunction, 
+                                              $matchParams, 
+                                              $mergeParams, 
+                                              $valueIndex1, 
+                                              $valueIndex2 
+                                            ) {
+    $preValues = $inValues;
+    $debug1 = $debug2 = $debug3 = 0;
+    
+    do {
+      $postValues = array();
+      $preCount = count( $preValues );
+      
+      while ( count( $preValues ) > 0 ) {
+        $value1 = $matchParams[$valueIndex1] = $mergeParams[$valueIndex1] = array_shift( $preValues );
+        $otherValues = $preValues;
+        $preValues = array();
+
+        while ( count( $otherValues ) > 0 ) {
+          $value2 = $matchParams[$valueIndex2] = $mergeParams[$valueIndex2] = array_shift( $otherValues );
+          $doMerge = call_user_func_array( $applyFunction, $matchParams );
+          $doMerge = strtolower( $parser->replaceVariables( ParserPower::unescape( trim( $doMerge ) ), $frame ) );
+
+          if ( $doMerge === 'yes' ) {
+            $value1 = call_user_func_array( $applyFunction, $mergeParams );
+            $value1 = $parser->replaceVariables( ParserPower::unescape( trim( $value1 ) ), $frame );
+            $matchParams[$valueIndex1] = $mergeParams[$valueIndex1] = $value1;
+          } else {
+            $preValues[] = $value2;
+          }
+        }
+
+        $postValues[] = $value1;
+      }
+      $postCount = count( $postValues );
+      $preValues = $postValues;
+    } while ( $postCount < $preCount && $postCount > 1 );
+    
+    return $postValues;
+  } 
+  
+  /**
+   * This function performs the pattern changing operation for the listmerge function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inList The input list.
+   * @param String $inSep The delimiter seoarating values in the input list.
+   * @param String $fieldSep The optional delimiter seoarating fields in each value.
+   * @param String $token1 The token(s) in the pattern that represents where the list value should go for item 1.
+   * @param String $token2 The token(s) in the pattern that represents where the list value should go for item 2.
+   * @param String $tokenSep The separator between tokens if used.
+   * @param String $matchPattern The pattern of text containing token that determines if items match.
+   * @param String $mergePattern The pattern of text containing token that list values are inserted into at that token.
+   * @param String $outSep The delimiter that should separate values in the output list.
+   * @param String $sortMode A string indicating what sort mode to use, if any.
+   * @param String $sortOptions A string of options for the sort as handled by #listsort.
+   * @param String $intro Content to include before outputted list values, only if at least one item is output.
+   * @param String $outro Content to include after outputted list values, only if at least one item is output.
+   * @param String $default Content to output if no list values are.
+   * @return Array The function output along with relevant parser options.
+   */
+  static private function mergeListByPattern( $parser, 
+                                              $frame, 
+                                              $inList, 
+                                              $inSep,
+                                              $fieldSep,
+                                              $token1,
+                                              $token2,
+                                              $tokenSep,
+                                              $matchPattern,
+                                              $mergePattern,
+                                              $outSep, 
+                                              $sortMode, 
+                                              $sortOptions,
+                                              $intro,
+                                              $outro,
+                                              $default
+                                            ) {
+    if ( $inList !== '' ) {
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      
+      $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
+      
+      if ( $sortMode == 'presort' || $sortMode == 'pre/postsort' ) {
+        $inValues = self::sortList( $inValues, $sortOptions );
+      }
+      
+      if ( $tokenSep !== '' ) {
+        $tokens1 = explode( $tokenSep, $token1 );
+        $tokens2 = explode( $tokenSep, $token2 );
+      } else {
+        $tokens1 = Array( $token1 );
+        $tokens2 = Array( $token2 );
+      }
+      
+      $matchParams = Array( $parser, $frame, null, null, $fieldSep, $tokens1, $tokens2, $matchPattern );
+      $mergeParams = Array( $parser, $frame, null, null, $fieldSep, $tokens1, $tokens2, $mergePattern );
+      $outValues = self::iterativeListMerge( $parser,
+                                             $frame,
+                                             $inValues, 
+                                             "ParserPowerLists::applyTwoSetFieldPattern", 
+                                             $matchParams, 
+                                             $mergeParams, 
+                                             2, 
+                                             3
+                                           );
+      
+      if ( $sortMode == 'sort' || $sortMode == 'postsort' || $sortMode == 'pre/postsort' ) {
+        $outValues = self::sortList( $outValues, $sortOptions );
+      }
+      
+      if ( count( $outValues ) > 0 ) {
+        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+      } else {
+        return Array( $default . "0 count", 'noparse' => false );
+      }
+      
+    } else {
+      return Array( $default . "no input", 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function performs the template changing option for the listmerge function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inList The input list.
+   * @param String $matchTemplate The template to use for the matching test.
+   * @param String $mergeTemplate The template to use for the merging operation.
+   * @param String $inSep The delimiter seoarating values in the input list.
+   * @param String $fieldSep The optional delimiter seoarating fields in each value.
+   * @param String $outSep The delimiter that should separate values in the output list.
+   * @param String $sortMode A string indicating what sort mode to use, if any.
+   * @param String $sortOptions A string of options for the sort as handled by #listsort.
+   * @param String $intro Content to include before outputted list values, only if at least one item is output.
+   * @param String $outro Content to include after outputted list values, only if at least one item is output.
+   * @param String $default Content to output if no list values are.
+   * @return Array The function output along with relevant parser options.
+   */
+  static private function mergeListByTemplate( $parser, 
+                                               $frame, 
+                                               $inList,
+                                               $matchTemplate,
+                                               $mergeTemplate,
+                                               $inSep,
+                                               $fieldSep,
+                                               $outSep,
+                                               $sortMode,
+                                               $sortOptions,
+                                               $intro,
+                                               $outro,
+                                               $default
+                                             ) {
+    if ( $inList !== '' ) {
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      
+      $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
+      
+      if ( $sortMode == 'presort' || $sortMode == 'pre/postsort' ) {
+        $inValues = self::sortList( $inValues, $sortOptions );
+      }
+      
+      $matchParams = Array( $parser, $frame, null, null, $matchTemplate, $fieldSep );
+      $mergeParams = Array( $parser, $frame, null, null, $mergeTemplate, $fieldSep );
+      $outValues = self::iterativeListMerge( $parser,
+                                             $frame,
+                                             $inValues, 
+                                             "ParserPowerLists::applyTemplateToTwoValues", 
+                                             $matchParams, 
+                                             $mergeParams, 
+                                             2, 
+                                             3
+                                           );
+      
+      if ( count( $outValues ) > 0 ) {
+        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+      } else {
+        return Array( $default, 'noparse' => false );
+      }
+      
+    } else {
+      return Array( $default, 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function renders the listmerge function, sending it to the appropriate processing function based on what
+   * parameter values are provided.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function listmergeRender( $parser, $frame, $params ) {
+    $params = ParserPower::arrangeParams( $frame, $params );
+    
+    $inList = isset( $params["list"] ) ? trim( $frame->expand( $params["list"] ) ) : '';
+    $default = isset( $params["default"] ) ? ParserPower::unescape( trim( $frame->expand( $params["default"] ) ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $matchTemplate = isset( $params["matchtemplate"] ) ? trim( $frame->expand( $params["matchtemplate"] ) ) : '';
+      $mergeTemplate = isset( $params["mergetemplate"] ) ? trim( $frame->expand( $params["mergetemplate"] ) ) : '';
+      $inSep = isset( $params["insep"] ) ? ParserPower::unescape( trim( $frame->expand( $params["insep"] ) ) ) : ',';
+      $fieldSep = isset( $params["fieldsep"] ) ? 
+                  ParserPower::unescape( trim( $frame->expand( $params["fieldsep"] ) ) ) : '';
+      $token1 = isset( $params["token1"] ) ? 
+                ParserPower::unescape( trim( $frame->expand( $params["token1"], 
+                                       PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                     ) : 'x1';
+      $token2 = isset( $params["token2"] ) ? 
+                ParserPower::unescape( trim( $frame->expand( $params["token2"], 
+                                       PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                     ) : 'x2';
+      $tokenSep = isset( $params["tokensep"] ) ? 
+                  ParserPower::unescape( trim( $frame->expand( $params["tokensep"] ) ) ) : ',';
+      $matchPattern = isset( $params["matchpattern"] ) ? $params["matchpattern"] : 'x';
+      $mergePattern = isset( $params["mergepattern"] ) ? $params["mergepattern"] : 'x';
+      $outSep = isset( $params["outsep"] ) ? 
+                ParserPower::unescape( trim( $frame->expand( $params["outsep"] ) ) ) : ', ';
+      $sortMode = isset ( $params["sortmode"] ) ? 
+                  strtolower( trim( $frame->expand( $params["sortmode"] ) ) ) : 'nosort';
+      $sortOptions = isset( $params["sortoptions"] ) ? trim( $frame->expand( $params["sortoptions"] ) ) : '';
+      $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
+      $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
+      
+      if ( $matchTemplate !== '' && $mergeTemplate !== '' ) {
+        return self::mergeListByTemplate( $parser, 
+                                          $frame, 
+                                          $inList, 
+                                          $matchTemplate, 
+                                          $mergeTemplate,
+                                          $inSep,
+                                          $fieldSep,
+                                          $outSep, 
+                                          $sortMode, 
+                                          $sortOptions,
+                                          $intro,
+                                          $outro,
+                                          $default
+                                        );
+      } else {
+        return self::mergeListByPattern( $parser, 
+                                         $frame, 
+                                         $inList, 
+                                         $inSep, 
+                                         $fieldSep,
+                                         $token1, 
+                                         $token2, 
+                                         $tokenSep,
+                                         $matchPattern,
+                                         $mergePattern,
+                                         $outSep, 
+                                         $sortMode, 
+                                         $sortOptions,
+                                         $intro,
+                                         $outro,
+                                         $default
+                                       );
+      }
+    } else {
+      return Array( $default . "not called", 'noparse' => false );
     }
   }
 }

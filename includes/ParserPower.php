@@ -82,7 +82,45 @@ class ParserPower {
     
     return $output;
   }
+  
+  /**
+   * Replaces all appropriate characters with escape sequences.
+   * @param string $input The string to escape.
+   * @return string The escaped string.
+   */
+  static public function escape( $input ) {
+    $output = '';
+    for ( $i = 0; $i < strlen( $input ); ++$i ) {
+      $char = substr( $input, $i, 1 );
+      switch ( $char ) {
+        case "\\":
+          $sequence = substr( $input, $i, 2 );
+          switch( $sequence ) {
+            case "\\n":    $output .= "\\\\n";      $i += 1;   break;
+            case "\\_":    $output .= "\\\\_";      $i += 1;   break;
+            case "\\\\":   $output .= "\\\\\\\\";   $i += 1;   break;
+            case "\\{":    $output .= "\\\\{";      $i += 1;   break;
+            case "\\}":    $output .= "\\\\}";      $i += 1;   break;
+            case "\\(":    $output .= "\\\\[";      $i += 1;   break;
+            case "\\)":    $output .= "\\\\]";      $i += 1;   break;
+            case "\\!":    $output .= "\\\\!";      $i += 1;   break;
+            case "\\0":    $output .= "\\\\0";      $i += 1;   break;
+            default:       $output .= "\\\\";                  break;
+          }
+          break;
+        case "\n":   $output .= "\\n";   break;
+        case " ":    $output .= "\\_";   break;
+        case "{":    $output .= "\\{";   break;
+        case "}":    $output .= "\\}";   break;
+        case "[":    $output .= "\\(";   break;
+        case "]":    $output .= "\\)";   break;
+        case "|":    $output .= "\\!";   break;
+        default:     $output .= $char;   break;
+      }
+    }
+    
+    return $output;
+  }
 }
 
 ?>
-

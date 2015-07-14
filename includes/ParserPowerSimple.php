@@ -14,24 +14,36 @@ class ParserPowerSimple {
    * @param Parser $parser The parser object being initialized.
    */
   static public function setup( &$parser ) {
-    $parser->setFunctionHook( 'MAG_TRIM', 
+    $parser->setFunctionHook( 'trim', 
                               'ParserPowerSimple::trimRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_UESC', 
+    $parser->setFunctionHook( 'uesc', 
                               'ParserPowerSimple::uescRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setFunctionHook( 'MAG_TRIMUESC', 
+    $parser->setFunctionHook( 'trimuesc', 
                               'ParserPowerSimple::trimuescRender', 
                               SFH_OBJECT_ARGS 
                             );
-    $parser->setHook( 'linkpage', 
-                      'ParserPowerSimple::linkpageRender'
-                    );
-    $parser->setHook( 'linktext', 
-                      'ParserPowerSimple::linktextRender'
-                    );
+    $parser->setFunctionTagHook( 'linkpage', 
+                                 'ParserPowerSimple::linkpageRender',
+                                 0
+                               );
+    $parser->setFunctionTagHook( 'linktext', 
+                                 'ParserPowerSimple::linktextRender',
+                                 0
+                               );
+    $parser->setFunctionTagHook( 'esc', 
+                                 'ParserPowerSimple::escRender',
+                                 0
+                               );
+    for ( $i = 1; $i < 10; ++$i ) {
+      $parser->setFunctionTagHook( 'esc' . $i, 
+                                   'ParserPowerSimple::escRender',
+                                   0
+                                 );
+    }
   }
 
   /**
@@ -50,9 +62,10 @@ class ParserPowerSimple {
   /**
    * This function performs the unescape operation for the uesc parser function. This trims the value first, leaving
    * whitespace intact if it's there after escape sequences are replaced.
-   * @param Parser $parser The parser object. Ignored.
+   * @param Parser $parser The parser object.
    * @param PPFrame $frame The parser frame object.
-   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @param string $text The text within the tag function.
+   * @param Array $attribs Attributes values of the tag function.
    * @return Array The function output along with relevant parser options.
    */
   static public function uescRender( $parser, $frame, $params ) {    
@@ -78,21 +91,22 @@ class ParserPowerSimple {
   /**
    * This function performs the delinking operation for the linktext parser function. This removes internal links from,
    * the given wikicode, replacing them with the name of the page they would have linked to.
-   * @param Parser $parser The parser object. Ignored.
+   * @param Parser $parser The parser object.
    * @param PPFrame $frame The parser frame object.
-   * @param Array $unexpandedParams The parameters and values together, not yet exploded or trimmed.
+   * @param string $text The text within the tag function.
+   * @param Array $attribs Attributes values of the tag function.
    * @return Array The function output along with relevent parser options.
    */
-  static public function linkpageRender( $text, $params, $parser, $frame ) {
-    $text = $parser->recursivePreprocess( $text, $frame );
+  static public function linkpageRender( &$parser, $frame, $text, $attribs ) {
+    $text = $parser->replaceVariables( $text, $frame );
     
     if ( $text ) {
-      $text = preg_replace_callback( '/\[\[(.*?)\]\]/', "self::linkpageReplace", $text );
+      return array( preg_replace_callback( '/\[\[(.*?)\]\]/', "self::linkpageReplace", $text ),
+                    'noparse' => false
+                  );
     } else {
-      $text = '';
+      return '';
     }
-    
-    return $parser->recursiveTagParse( $text, $frame );
   }
   
   /**
@@ -115,16 +129,16 @@ class ParserPowerSimple {
    * @param Array $unexpandedParams The parameters and values together, not yet exploded or trimmed.
    * @return Array The function output along with relevent parser options.
    */
-  static public function linktextRender( $text, $params, $parser, $frame ) {
-    $text = $parser->recursivePreprocess( $text, $frame );
+  static public function linktextRender( &$parser, $frame, $text, $attribs ) {
+    $text = $parser->replaceVariables( $text, $frame );
     
     if ( $text ) {
-      $text = preg_replace_callback( '/\[\[(.*?)\]\]/', "self::linktextReplace", $text );
+      return array( preg_replace_callback( '/\[\[(.*?)\]\]/', "self::linktextReplace", $text ),
+                    'noparse' => false
+                  );
     } else {
-      $text = '';
+      return '';
     }
-    
-    return $parser->recursiveTagParse( $text, $frame );
   }
   
   /**
@@ -141,6 +155,22 @@ class ParserPowerSimple {
     } else {
       return $parts[0];
     }
+  }
+  
+  /**
+   * This function escapes all appropriate characters in the given text and returns the result.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param string $text The text within the tag function.
+   * @param Array $attribs Attributes values of the tag function.
+   * @return Array The function output along with relevent parser options.
+   */
+  static public function escRender( &$parser, $frame, $text, $attribs ) {
+    $text = ParserPower::escape( $text );
+    
+    $text = $parser->replaceVariables( $text, $frame );
+    
+    return Array( $text, 'noparse' => false );
   }
 }
 
