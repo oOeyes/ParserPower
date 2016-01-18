@@ -22,6 +22,10 @@ class ParserPowerSimple {
                               'ParserPowerSimple::uescRender', 
                               SFH_OBJECT_ARGS 
                             );
+    $parser->setFunctionHook( 'uescnowiki', 
+                              'ParserPowerSimple::uescnowikiRender', 
+                              SFH_OBJECT_ARGS 
+                            );
     $parser->setFunctionHook( 'trimuesc', 
                               'ParserPowerSimple::trimuescRender', 
                               SFH_OBJECT_ARGS 
@@ -44,6 +48,34 @@ class ParserPowerSimple {
                                    0
                                  );
     }
+    $parser->setFunctionHook( 'ueif', 
+                              'ParserPowerSimple::ueifRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'or', 
+                              'ParserPowerSimple::orRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'ueifeq', 
+                              'ParserPowerSimple::ueifeqRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'token', 
+                              'ParserPowerSimple::tokenRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'tokenif', 
+                              'ParserPowerSimple::tokenifRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'ueswitch', 
+                              'ParserPowerSimple::ueswitchRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'follow', 
+                              'ParserPowerSimple::followRender', 
+                              SFH_OBJECT_ARGS 
+                            );
   }
 
   /**
@@ -70,6 +102,24 @@ class ParserPowerSimple {
    */
   static public function uescRender( $parser, $frame, $params ) {    
     return Array( isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( $params[0] ) ) ) : '', 
+                  'noparse' => false,
+                );
+  }
+  
+  /**
+   * This function performs the unescape operation for the uescnowiki parser function. This trims the value first, 
+   * leaving whitespace intact if it's there after escape sequences are replaced. It returns the content wrapped in
+   * <nowiki> tags so that it isn't parsed.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param string $text The text within the tag function.
+   * @param Array $attribs Attributes values of the tag function.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function uescnowikiRender( $parser, $frame, $params ) {
+    $text = isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( $params[0] ) ) ) : '';
+    
+    return Array( '<nowiki>' . $text . '</nowiki>', 
                   'noparse' => false,
                 );
   }
@@ -172,6 +222,156 @@ class ParserPowerSimple {
     
     return Array( $text, 'noparse' => false );
   }
-}
+  
+  /**
+   * This function performs the test for the ueif function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function ueifRender( $parser, $frame, $params ) {
+    $condition = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    $trueValue = isset( $params[1] ) ? $params[1] : '';
+    $falseValue = isset( $params[2] ) ? $params[2] : '';
+    
+    if ( $condition !== '' ) {
+      return Array( ParserPower::unescape( $frame->expand( $trueValue ) ), 'noparse' => false );
+    } else {
+      return Array( ParserPower::unescape( $frame->expand( $falseValue ) ), 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function performs the test for the or function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function orRender( $parser, $frame, $params ) {
+    $inValue1 = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    $inValue2 = isset( $params[1] ) ? $params[1] : '';
+    
+    if ( $inValue1 !== '' ) {
+      return Array( ParserPower::unescape( $inValue1 ), 'noparse' => false );
+    } else {
+      return Array( ParserPower::unescape( trim( $frame->expand( $inValue2 ) ) ), 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function performs the test for the ueifeq function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function ueifeqRender( $parser, $frame, $params ) {
+    $leftValue = isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( $params[0] ) ) ) : '';
+    $rightValue = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+    $trueValue = isset( $params[2] ) ? $params[2] : '';
+    $falseValue = isset( $params[3] ) ? $params[3] : '';
+    
+    if ( $leftValue === $rightValue ) {
+      return Array( ParserPower::unescape( $frame->expand( $trueValue ) ), 'noparse' => false );
+    } else {
+      return Array( ParserPower::unescape( $frame->expand( $falseValue ) ), 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function performs the replacement for the token function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function tokenRender( $parser, $frame, $params ) {
+    $inValue = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    
+    $token = isset( $params[1] ) ? 
+             ParserPower::unescape( trim( $frame->expand( $params[1], PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) ) : 
+             'x';
+    $pattern = isset( $params[2] ) ? $params[2] : 'x';
 
-?>
+    return Array( ParserPower::applyPattern( $parser, $frame, $inValue, $token, $pattern ), 'noparse' => false );
+  }
+  
+  /**
+   * This function performs the replacement for the tokenif function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function tokenifRender( $parser, $frame, $params ) {
+    $inValue = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    $default = isset( $params[3] ) ? trim( $frame->expand( $params[3] ) ) : '';
+    
+    if ( $inValue !== '' ) {
+      $token = isset( $params[1] ) ? 
+               ParserPower::unescape( trim( $frame->expand( $params[1], PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) ) : 
+               'x';
+      $pattern = isset( $params[2] ) ? $params[2] : 'x';
+      
+      return Array( ParserPower::applyPattern( $parser, $frame, $inValue, $token, $pattern ), 'noparse' => false );
+    } else {
+      return Array( ParserPower::unescape( $default ), 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function performs the test for the ueswitch function.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function ueswitchRender( $parser, $frame, $params ) {
+    $switchKey = isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( array_shift ( $params ) ) ) ) : '';
+    if ( count( $params ) > 0 ) {
+      $default = '';
+      if ( strpos( $frame->expand( $params[count( $params ) - 1] ), "=" ) === false ) {
+        $default = array_pop( $params );
+      }
+      
+      $keyFound = false;
+      foreach ( $params as $param ) {
+        $pair = explode( "=", trim( $frame->expand( $param ) ), 2 );
+        if ( !$keyFound && ParserPower::unescape( $pair[0] ) === $switchKey ) {
+          $keyFound = true;
+        }
+        if ( $keyFound && count( $pair ) > 1 ) {
+          return Array( ParserPower::unescape( trim( $frame->expand( $pair[1] ) ) ), 'noparse' => false );
+        }
+      }
+      return Array( ParserPower::unescape( trim( $frame->expand( $default ) ) ), 'noparse' => false );
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+
+  /**
+   * This function performs the follow operation for the follow parser function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function followRender( $parser, $frame, $params ) {
+    $text = isset( $params[0] ) ? trim( ParserPower::unescape( $frame->expand( $params[0] ) ) ) : '';
+    
+    $output = $text;
+    $title = Title::newFromText( $text );
+    if ( $title !== null && $title->getNamespace() !== NS_MEDIA && $title->getNamespace() > -1 ) {
+      $page = WikiPage::factory( $title );
+      $target = $page->getRedirectTarget();
+      if ( $target !== null ) {
+        $output = $target->getPrefixedText();
+      }
+    }
+    
+    return Array( $output, 'noparse' => false );
+  }
+}

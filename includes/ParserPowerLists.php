@@ -40,12 +40,42 @@ class ParserPowerLists {
   const SORT_DESC = 1;
   
   /**
+   * Flag for index search returning a positive index. 0 as this is a default mode.
+   */
+  const INDEX_POS = 0;
+  
+  /**
+   * Flag for index search returning a negative index.
+   */
+  const INDEX_NEG = 4;
+  
+  /**
+   * Flag for case insensitive index search. 0 as this is a default mode.
+   */
+  const INDEX_NCS = 0;
+  
+  /**
+   * Flag for case sensitive index search.
+   */
+  const INDEX_CS = 2;
+  
+  /**
+   * Flag for forward index search. 0 as this is a default mode.
+   */
+  const INDEX_ASC = 0;
+  
+  /**
+   * Flag for reverse index search.
+   */
+  const INDEX_DESC = 1;
+  
+  /**
    * Flag for case insensitive item removal. 0 as this is a default mode.
    */
   const REMOVE_NCS = 0;
   
   /**
-   * Flag for case insensitive item removal.
+   * Flag for case sensitive item removal.
    */
   const REMOVE_CS = 1;
   
@@ -62,8 +92,20 @@ class ParserPowerLists {
                               'ParserPowerLists::lstsepRender', 
                               SFH_OBJECT_ARGS 
                             );
+    $parser->setFunctionHook( 'lstelem', 
+                              'ParserPowerLists::lstelemRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstsub', 
+                              'ParserPowerLists::lstsubRender', 
+                              SFH_OBJECT_ARGS 
+                            );
     $parser->setFunctionHook( 'lstfnd', 
                               'ParserPowerLists::lstfndRender', 
+                              SFH_OBJECT_ARGS 
+                            );
+    $parser->setFunctionHook( 'lstind', 
+                              'ParserPowerLists::lstindRender', 
                               SFH_OBJECT_ARGS 
                             );
     $parser->setFunctionHook( 'lstapp', 
@@ -135,13 +177,91 @@ class ParserPowerLists {
    * @return Array The values in an array of strings.
    */
   static private function explodeList( $sep, $list ) {    
-    if ( $sep == '' ) {
+    if ( $sep === '' ) {
 			$values = preg_split( '/(.)/u', $list, -1, PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE );
 		} else {
 			$values = explode( $sep, $list );
 		}
     
     return $values;
+  }
+  
+  /**
+   * This function gets the specified element from the array after filtering out any empty values before it so that
+   * the empty values are skipped in index counting. The returned element is unescaped.
+   * @param Array $inIndex The 1-based index of the array element to get, or a negative value to start from the end.
+   * @param Array $inValues The array to get the element from.
+   * @return string The array element, trimmed and with character escapes replaced, or empty string if not found.
+   */
+  static private function arrayElementTrimUnescape( $inIndex, $inValues ) {
+    if ( $inIndex > 0 ) {
+      $curOutIndex = 1;
+      for ( $curInIndex = 0; $curInIndex < count( $inValues ); ++$curInIndex ) {
+        $trimmedValue = trim( $inValues[$curInIndex] );
+        if ( !ParserPower::isEmpty( $trimmedValue ) ) {
+          if ( $inIndex === $curOutIndex ) {
+            return ParserPower::unescape( $trimmedValue );
+          } else {
+            ++$curOutIndex;
+          }
+        }
+      }
+    } else if ( $inIndex < 0 ) {
+      $curOutIndex = -1;
+      for ( $curInIndex = count( $inValues ) - 1; $curInIndex > -1; --$curInIndex ) {
+        $trimmedValue = trim( $inValues[$curInIndex] );
+        if ( !ParserPower::isEmpty( $trimmedValue ) ) {
+          if ( $inIndex === $curOutIndex ) {
+            return ParserPower::unescape( $trimmedValue );
+          } else {
+            --$curOutIndex;
+          }
+        }
+      }
+    }
+    
+    return "";
+  }
+  
+  /**
+   * This function trims whitespace each value while also filtering emoty values from the array, then slicing it 
+   * according to specified offset and length. It also performs unescaping on each item. Note that values that are only 
+   * empty after the unescape are preserved.
+   * @param Array $
+   * @param Array $inValues The array to trim, remove empty values from, slice, and unescape.
+   * @return Array A new array with trimmed values, character escapes replaced, and empty values preunescape removed.
+   */
+  static private function arrayTrimSliceUnescape( $inOffset, $inLength, $inValues ) {
+    $midValues = Array();
+    
+    foreach ( $inValues as $inValue ) {
+      $trimmedValue = trim( $inValue );
+      if ( !ParserPower::isEmpty( $trimmedValue ) ) {
+        $midValues[] = $trimmedValue;
+      }
+    }
+    
+    if ( $inOffset > 0 ) {
+      $offset = $inOffset - 1; 
+    } else {
+      $offset = $inOffset;
+    }
+
+    if ( $offset < 0 ) {
+      $length = -$offset;
+    } else {
+      $length = count( $midValues ) - $offset;
+    }
+    if ( $inLength !== null ) {
+      $length = intval( $inLength );
+    }
+    
+    $midValues = array_slice( $midValues, $offset, $length );
+    foreach ( $midValues as $midValue ) {
+      $outValues[] = ParserPower::unescape( $midValue );
+    }
+    
+    return $outValues;
   }
   
   /**
@@ -154,8 +274,9 @@ class ParserPowerLists {
     $outValues = Array();
     
     foreach ( $inValues as $inValue ) {
-      if ( !ParserPower::isEmpty( $inValue ) ) {
-        $outValues[] = ParserPower::unescape( trim( $inValue ) );
+      $trimmedValue = trim( $inValue );
+      if ( !ParserPower::isEmpty( $trimmedValue ) ) {
+        $outValues[] = ParserPower::unescape( $trimmedValue );
       }
     }
     
@@ -172,7 +293,7 @@ class ParserPowerLists {
   static public function lstcntRender( $parser, $frame, $params ) {
     $list = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
     
-    if ( $inList !== '' ) {
+    if ( $list !== '' ) {
       $sep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
       
       $sep = $parser->mStripState->unstripNoWiki( $sep );
@@ -210,7 +331,76 @@ class ParserPowerLists {
   }
   
   /**
-   * This function directs the delimiter replacement operation for the lstfnd function.
+   * This function directs the list element retrieval operation for the lstelem function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstelemRender( $parser, $frame, $params ) {
+    $inList = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $inSep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+      $inIndex = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : '';
+      
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      
+      $value = "";
+      if ( is_numeric( $inIndex ) ) {
+        $value = self::arrayElementTrimUnescape( intval( $inIndex ), self::explodeList( $inSep, $inList ) );
+      }
+      
+      return Array( $value, 'noparse' => false );
+      
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function directs the list subdivision and delimiter replacement operation for the lstsub function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstsubRender( $parser, $frame, $params ) {
+    $inList = isset( $params[0] ) ? trim( $frame->expand( $params[0] ) ) : '';
+    
+    if ( $inList !== '' ) {
+      $inSep = isset( $params[1] ) ? ParserPower::unescape( trim( $frame->expand( $params[1] ) ) ) : '';
+      $outSep = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : '';
+      $inOffset = isset( $params[3] ) ? ParserPower::unescape( trim( $frame->expand( $params[3] ) ) ) : '';
+      $inLength = isset( $params[4] ) ? ParserPower::unescape( trim( $frame->expand( $params[4] ) ) ) : '';
+      
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      
+      $offset = 0;
+      if ( is_numeric( $inOffset ) ) {
+        $offset = intval( $inOffset );
+      }
+      
+      $length = null;
+      if ( is_numeric( $inLength ) ) {
+        $length = intval( $inLength );
+      }
+      
+      $values = self::arrayTrimSliceUnescape( $offset, $length, self::explodeList( $inSep, $inList ) );
+      
+      if ( count( $values ) > 0 ) {
+        return Array( implode( $outSep, $values ), 'noparse' => false );
+      } else {
+        return Array( '', 'noparse' => false );
+      }
+      
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function directs the search operation for the lstfnd function.
    * @param Parser $parser The parser object. Ignored.
    * @param PPFrame $frame The parser frame object.
    * @param Array $params The parameters and values together, not yet expanded or trimmed.
@@ -219,7 +409,7 @@ class ParserPowerLists {
   static public function lstfndRender( $parser, $frame, $params ) {
     $list = isset( $params[1] ) ? trim( $frame->expand( $params[1] ) ) : '';
     
-    if ( $inList !== '' ) {
+    if ( $list !== '' ) {
       $item = isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( $params[0] ) ) ) : '';
       $sep = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : ',';
       $csOption = isset ( $params[3] ) ? 
@@ -241,7 +431,70 @@ class ParserPowerLists {
           }
         }
       }
-      return Array( implode( $outSep, $values ), 'noparse' => false );
+      return Array( '', 'noparse' => false );
+      
+    } else {
+      return Array( '', 'noparse' => false );
+    }
+  }
+  
+  /**
+   * This function directs the search operation for the lstind function.
+   * @param Parser $parser The parser object. Ignored.
+   * @param PPFrame $frame The parser frame object.
+   * @param Array $params The parameters and values together, not yet expanded or trimmed.
+   * @return Array The function output along with relevant parser options.
+   */
+  static public function lstindRender( $parser, $frame, $params ) {
+    $list = isset( $params[1] ) ? trim( $frame->expand( $params[1] ) ) : '';
+    
+    if ( $list !== '' ) {
+      $item = isset( $params[0] ) ? ParserPower::unescape( trim( $frame->expand( $params[0] ) ) ) : '';
+      $sep = isset( $params[2] ) ? ParserPower::unescape( trim( $frame->expand( $params[2] ) ) ) : ',';
+      $inOptions = isset( $params[3] ) ? strtolower( trim( $frame->expand( $params[3] ) ) ) : '';
+      
+      $inSep = $parser->mStripState->unstripNoWiki( $inSep );
+      $options = self::indexOptionsFromParam( $inOptions );
+      
+      $values = self::arrayTrimUnescape( self::explodeList( $sep, $list ) );
+      if ( $options & self::INDEX_DESC ) {
+        if ( $options & self::INDEX_CS ) {
+          for ( $index = count( $values ) - 1; $index > -1; --$index ) {
+            if ( $values[$index] === $item ) {
+              return Array( strval( ( $options & self::INDEX_NEG ) ? $index - count( $values )  : $index + 1 ), 
+                            'noparse' => false 
+                          );
+            }
+          }
+        } else {
+          for ( $index = count( $values ) - 1; $index > -1; --$index ) {
+            if ( strtolower( $values[$index] ) === strtolower( $item ) ) {
+              return Array( strval( ( $options & self::INDEX_NEG ) ? $index - count( $values )  : $index + 1 ), 
+                            'noparse' => false 
+                          );
+            }
+          }
+        }
+      } else {
+        if ( $options & self::INDEX_CS ) {
+          for ( $index = 0; $index < count( $values ); ++$index ) {
+            if ( $values[$index] === $item ) {
+              return Array( strval( ( $options & self::INDEX_NEG ) ? $index - count( $values )  : $index + 1 ), 
+                            'noparse' => false 
+                          );
+            }
+          }
+        } else {
+          for ( $index = 0; $index < count( $values ); ++$index ) {
+            if ( strtolower( $values[$index] ) === strtolower( $item ) ) {
+              return Array( strval( ( $options & self::INDEX_NEG ) ? $index - count( $values )  : $index + 1 ), 
+                            'noparse' => false 
+                          );
+            }
+          }
+        }
+      }
+      return Array( '', 'noparse' => false );
       
     } else {
       return Array( '', 'noparse' => false );
@@ -352,14 +605,23 @@ class ParserPowerLists {
    * @return The result of the token replacement within the pattern.
    */
   static private function applyPattern( $parser, $frame, $inValue, $token, $pattern ) {
-    $inValue = trim( $inValue );
-    
-    if ( $inValue != '' ) {
-      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
-      $outValue = str_replace( $token, $inValue, $outValue );
-      $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
-      return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
-    }
+    return ParserPower::applyPattern( $parser, $frame, $inValue, $token, $pattern );
+  }
+  
+  /**
+   * Replaces the indicated index token in the pattern with the given index and the token in the pattern with the input
+   * value.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters.
+   * @param int $indexToken The token to replace with the index, or a null or empty value to skip index replacement.
+   * @param int $index The numeric index of this value.
+   * @param String $token The token to replace.
+   * @param String $pattern Pattern containing token to be replaced with the input value.
+   * @return The result of the token replacement within the pattern.
+   */
+  static private function applyPatternWithIndex( $parser, $frame, $inValue, $indexToken, $index, $token, $pattern ) {
+    return ParserPower::applyPatternWithIndex( $parser, $frame, $inValue, $indexToken, $index, $token, $pattern );
   }
   
   /**
@@ -381,18 +643,61 @@ class ParserPowerLists {
                                              $tokenCount, 
                                              $pattern 
                                            ) {
-    $inValue = trim( $inValue );
-    
-    if ( $inValue != '' ) {
-      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
-      $fields = explode( $fieldSep, $inValue, $tokenCount );
-      $fieldCount = count( $fields );
-      for ( $i = 0; $i < $tokenCount; $i++ ) {
-        $outValue = str_replace( $tokens[$i], ( $i < $fieldCount ) ? $fields[$i] : '', $outValue );
-      }
-      $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
-      return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
+    return ParserPower::applyFieldPattern( $parser, $frame, $inValue, $fieldSep, $tokens, $tokenCount, $pattern );
+  }
+  
+  /**
+   * Replaces the index token with the given index, and then breaks the input value into fields and then replaces the 
+   * indicated tokens in the pattern with those field values.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters
+   * @param String $fieldSep The delimiter separating the fields in the value.
+   * @param int $indexToken The token to replace with the index, or a null or empty value to skip index replacement.
+   * @param int $index The numeric index of this value.
+   * @param Array $tokens The list of tokens to replace.
+   * @param int $tokenCount The number of tokens.
+   * @param String $pattern Pattern containing tokens to be replaced by field values.
+   * @return The result of the token replacement within the pattern.
+   */
+  static private function applyFieldPatternWithIndex( $parser, 
+                                                      $frame, 
+                                                      $inValue,
+                                                      $fieldSep,
+                                                      $indexToken,
+                                                      $index,
+                                                      $tokens, 
+                                                      $tokenCount, 
+                                                      $pattern 
+                                                    ) {
+    return ParserPower::applyFieldPatternWithIndex( $parser, 
+                                                    $frame, 
+                                                    $inValue, 
+                                                    $fieldSep, 
+                                                    $indexToken, 
+                                                    $index, 
+                                                    $tokens, 
+                                                    $tokenCount, 
+                                                    $pattern
+                                                  );
+  }
+  
+  /**
+   * Wraps the given intro and outro around the given content after replacing a given count token in the intro or outro
+   * with the given count.
+   * @param string $intro The intro text.
+   * @param string $content The inner content.
+   * @param string $outro The outro test.
+   * @param string $countToken The token to replace with count. Null or empty to skip.
+   * @param int $count The count to replace the token with.
+   * @return string The content wrapped by the intro and outro.
+   */
+  static private function applyIntroAndOutro( $intro, $content, $outro, $countToken, $count ) {
+    if ( $countToken !== null && $countToken !== "" ) {
+      $intro = str_replace( $countToken, strval( $count ), $intro );
+      $outro = str_replace( $countToken, strval( $count ), $outro );
     }
+    return $intro . $content . $outro;
   }
   
   /**
@@ -506,6 +811,7 @@ class ParserPowerLists {
    * @param PPFrame $frame The parser frame object.
    * @param String $inValues Array with the input values.
    * @param String $fieldSep Separator between fields, if any.
+   * @param String $indexToken The token to replace with the current 1-based index of the element. Null/empty to skip.
    * @param String $token The token(s) in the pattern that represents where the list value should go.
    * @param String $tokenSep The separator between tokens if used.
    * @param String $pattern The pattern of text containing token that list values are inserted into at that token.
@@ -515,6 +821,7 @@ class ParserPowerLists {
                                                    $frame, 
                                                    $inValues,
                                                    $fieldSep,
+                                                   $indexToken, 
                                                    $token, 
                                                    $tokenSep,
                                                    $pattern
@@ -523,19 +830,36 @@ class ParserPowerLists {
     if ( $fieldSep !== '' && $tokenSep !== '' ) {
       $tokens = explode( $tokenSep, $token );
       $tokenCount = count( $tokens );
+      $index = 1;
       foreach ( $inValues as $value ) {
-        $result = self::applyFieldPattern( $parser, $frame, $value, $fieldSep, $tokens, $tokenCount, $pattern );
-        $result = strtolower( $parser->replaceVariables( ParserPower::unescape( trim( $result ) ), $frame ) );
-        if ( $value != '' && $result !== "remove" ) {
-          $outValues[] = $value;
+        if ( trim( $value ) !== '' ) {
+          $result = self::applyFieldPatternWithIndex( $parser, 
+                                                      $frame, 
+                                                      $value, 
+                                                      $fieldSep, 
+                                                      $indexToken, 
+                                                      $index, 
+                                                      $tokens, 
+                                                      $tokenCount, 
+                                                      $pattern 
+                                                    );
+          $result = strtolower( $parser->replaceVariables( ParserPower::unescape( trim( $result ) ), $frame ) );
+          if ( $result !== "remove" ) {
+            $outValues[] = $value;
+          }
+          ++$index;
         }
       }
     } else {
+      $index = 1;
       foreach ( $inValues as $value ) {
-        $result = self::applyPattern( $parser, $frame, $value, $token, $pattern );
-        $result = $parser->replaceVariables( ParserPower::unescape( $result ), $frame );
-        if ( $value != '' && strtolower( $result ) !== "remove" ) {
-          $outValues[] = $value;
+        if ( trim( $value ) !== '' ) {
+          $result = self::applyPatternWithIndex( $parser, $frame, $value, $indexToken, $index, $token, $pattern );
+          $result = strtolower( $parser->replaceVariables( ParserPower::unescape( $result ), $frame ) );
+          if ( $result !== "remove" ) {
+            $outValues[] = $value;
+          }
+          ++$index;
         }
       }
     }
@@ -593,20 +917,28 @@ class ParserPowerLists {
       $inSep = isset( $params["insep"] ) ? ParserPower::unescape( trim( $frame->expand( $params["insep"] ) ) ) : ',';
       $fieldSep = isset( $params["fieldsep"] ) ? 
                   ParserPower::unescape( trim( $frame->expand( $params["fieldsep"] ) ) ) : '';
+      $indexToken = isset( $params["indextoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["indextoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $token = isset( $params["token"] ) ? 
                ParserPower::unescape( trim( $frame->expand( $params["token"], 
                                       PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
-                                    ) : 'x';
+                                    ) : '';
       $tokenSep = isset( $params["tokensep"] ) ? 
                   ParserPower::unescape( trim( $frame->expand( $params["tokensep"] ) ) ) : ',';
-      $pattern = isset( $params["pattern"] ) ? $params["pattern"] : 'x';
+      $pattern = isset( $params["pattern"] ) ? $params["pattern"] : '';
       $outSep = isset( $params["outsep"] ) ? 
                 ParserPower::unescape( trim( $frame->expand( $params["outsep"] ) ) ) : ', ';
+      $countToken = isset( $params["counttoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["counttoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
       $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
       
       $inSep = $parser->mStripState->unstripNoWiki( $inSep );
-      $valueSep = $parser->mStripState->unstripNoWiki( $valueSep );
+      $tokenSep = $parser->mStripState->unstripNoWiki( $tokenSep );
       
       $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
       
@@ -628,7 +960,8 @@ class ParserPowerLists {
         $outValues = self::filterFromListByPattern( $parser, 
                                                     $frame, 
                                                     $inValues, 
-                                                    $fieldSep,
+                                                    $fieldSep, 
+                                                    $indexToken,
                                                     $token, 
                                                     $tokenSep,
                                                     $pattern
@@ -636,7 +969,9 @@ class ParserPowerLists {
       }
       
       if ( count( $outValues ) > 0 ) {
-        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+        $outList = implode( $outSep, $outValues );
+        $count = strval( count( $outValues ) );
+        return Array( self::applyIntroAndOutro( $intro, $outList, $outro, $countToken, $count ), 'noparse' => false );
       } else {
         return Array( $default, 'noparse' => false );
       }
@@ -774,6 +1109,7 @@ class ParserPowerLists {
    * @param PPFrame $frame The parser frame object.
    * @param Array $inValues The input list.
    * @param String $fieldSep Separator between fields, if any.
+   * @param String $indexToken The token to replace with the current 1-based index of the element. Null/empty to skip.
    * @param String $token The token in the pattern that represents where the list value should go.
    * @param Array $tokens Or if there are mulitple fields, the tokens representing where they go.
    * @param String $pattern The pattern of text containing token that list values are inserted into at that token.
@@ -783,6 +1119,7 @@ class ParserPowerLists {
                                                             $frame,
                                                             $inValues,
                                                             $fieldSep,
+                                                            $indexToken,
                                                             $token,
                                                             $tokens,
                                                             $pattern
@@ -791,21 +1128,38 @@ class ParserPowerLists {
     $outValues = Array();
     if ( ( isset( $tokens ) && is_array( $tokens ) ) ) {
       $tokenCount = count( $tokens );
+      $index = 1;
       foreach ( $inValues as $value ) {
-        $key = self::applyFieldPattern( $parser, $frame, $value, $fieldSep, $tokens, $tokenCount, $pattern );
-        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
-        if ( !in_array( $key, $previousKeys ) ) {
-          $previousKeys[] = $key;
-          $outValues[] = $value;
+        if ( trim( $value ) !== '' ) {
+          $key = self::applyFieldPatternWithIndex( $parser, 
+                                                   $frame, 
+                                                   $value, 
+                                                   $fieldSep, 
+                                                   $indexToken, 
+                                                   $index, 
+                                                   $tokens, 
+                                                   $tokenCount, 
+                                                   $pattern 
+                                                 );
+          $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+          if ( !in_array( $key, $previousKeys ) ) {
+            $previousKeys[] = $key;
+            $outValues[] = $value;
+          }
+          ++$index;
         }
       }
     } else {
+      $index = 1;
       foreach ( $inValues as $value ) {
-        $key = self::applyPattern( $parser, $frame, $value, $token, $pattern );
-        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
-        if ( !in_array( $key, $previousKeys ) ) {
-          $previousKeys[] = $key;
-          $outValues[] = $value;
+        if ( trim( $value ) !== '' ) {
+          $key = self::applyPatternWithIndex( $parser, $frame, $value, $indexToken, $index, $token, $pattern );
+          $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+          if ( !in_array( $key, $previousKeys ) ) {
+            $previousKeys[] = $key;
+            $outValues[] = $value;
+          }
+          ++$index;
         }
       }
     }
@@ -858,6 +1212,10 @@ class ParserPowerLists {
       $inSep = isset( $params["insep"] ) ? ParserPower::unescape( trim( $frame->expand( $params["insep"] ) ) ) : ',';
       $fieldSep = isset( $params["fieldsep"] ) ? 
                   ParserPower::unescape( trim( $frame->expand( $params["fieldsep"] ) ) ) : '';
+      $indexToken = isset( $params["indextoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["indextoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $token = isset( $params["token"] ) ? 
                ParserPower::unescape( trim( $frame->expand( $params["token"], 
                                       PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
@@ -867,6 +1225,10 @@ class ParserPowerLists {
       $pattern = isset( $params["pattern"] ) ? $params["pattern"] : '';
       $outSep = isset( $params["outsep"] ) ? 
                 ParserPower::unescape( trim( $frame->expand( $params["outsep"] ) ) ) : ', ';
+      $countToken = isset( $params["counttoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["counttoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
       $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
       
@@ -883,11 +1245,12 @@ class ParserPowerLists {
                                                               $template,
                                                               $fieldSep
                                                             );
-      } else if ( $token !== '' && $pattern !== '' ) {
+      } else if ( ( $indexToken !== '' || $token !== '' ) && $pattern !== '' ) {
         $outValues = self::reduceToUniqueValuesByKeyPattern( $parser, 
                                                              $frame, 
                                                              $inValues, 
-                                                             $fieldSep,
+                                                             $fieldSep, 
+                                                             $indexToken,
                                                              $token, 
                                                              isset( $tokens ) ? $tokens : null,
                                                              $pattern
@@ -895,10 +1258,35 @@ class ParserPowerLists {
       } else {
         $outValues = self::reduceToUniqueValues( $inValues, $uniqueCS === "yes" );
       }
-      return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+      $outList = implode( $outSep, $outValues );
+      $count = strval( count( $outValues ) );
+      return Array( self::applyIntroAndOutro( $intro, $outList, $outro, $countToken, $count ), 'noparse' => false );
     } else {
       return Array( $default, 'noparse' => false );
     }
+  }
+ 
+  /**
+   * This function converts a string containing sort option keywords into an integer of sort option flags.
+   * @param string $param The string containg sort options keywords.
+   * @param int $default ANy flags that should be set by default.
+   * @return int The flags representing the requested options.
+   */
+  static private function sortOptionsFromParam( $param, $default = 0 ) {
+    $optionKeywords = explode( ' ', $param );
+    $options = $default;
+    foreach( $optionKeywords as $optionKeyword ) {
+      switch ( strtolower( trim( $optionKeyword ) ) ) {
+        case 'numeric':   $options |= self::SORT_NUMERIC;         break;
+        case 'alpha':     $options &= ~self::SORT_NUMERIC;        break;
+        case 'cs':        $options |= self::SORT_CS;              break;
+        case 'ncs':       $options &= ~self::SORT_CS;             break;
+        case 'desc':      $options |= self::SORT_DESC;            break;
+        case 'asc':       $options &= ~self::SORT_DESC;           break;
+      }
+    }
+    
+    return $options;
   }
   
   /**
@@ -929,22 +1317,22 @@ class ParserPowerLists {
   }
  
   /**
-   * This function converts a string containing sort option keywords into an integer of sort option flags.
-   * @param string $param The string containg sort options keywords.
+   * This function converts a string containing index option keywords into an integer of index option flags.
+   * @param string $param The string containg index options keywords.
    * @param int $default ANy flags that should be set by default.
    * @return int The flags representing the requested options.
    */
-  static private function sortOptionsFromParam( $param, $default = 0 ) {
+  static private function indexOptionsFromParam( $param, $default = 0 ) {
     $optionKeywords = explode( ' ', $param );
     $options = $default;
     foreach( $optionKeywords as $optionKeyword ) {
       switch ( strtolower( trim( $optionKeyword ) ) ) {
-        case 'numeric':   $options |= self::SORT_NUMERIC;         break;
-        case 'alpha':     $options &= ~self::SORT_NUMERIC;        break;
-        case 'cs':        $options |= self::SORT_CS;              break;
-        case 'ncs':       $options &= ~self::SORT_CS;             break;
-        case 'desc':      $options |= self::SORT_DESC;            break;
-        case 'asc':       $options &= ~self::SORT_DESC;           break;
+        case 'neg':       $options |= self::INDEX_NEG;             break;
+        case 'pos':       $options &= ~self::INDEX_NEG;            break;
+        case 'cs':        $options |= self::INDEX_CS;              break;
+        case 'ncs':       $options &= ~self::INDEX_CS;             break;
+        case 'desc':      $options |= self::INDEX_DESC;            break;
+        case 'asc':       $options &= ~self::INDEX_DESC;           break;
       }
     }
     
@@ -1005,6 +1393,7 @@ class ParserPowerLists {
                                                      $frame,
                                                      $values,
                                                      $fieldSep,
+                                                     $indexToken,
                                                      $token,
                                                      $tokens,
                                                      $pattern
@@ -1012,16 +1401,33 @@ class ParserPowerLists {
     $pairedValues = Array();
     if ( ( isset( $tokens ) && is_array( $tokens ) ) ) {
       $tokenCount = count( $tokens );
+      $index = 1;
       foreach ( $values as $value ) {
-        $key = self::applyFieldPattern( $parser, $frame, $value, $fieldSep, $tokens, $tokenCount, $pattern );
-        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
-        $pairedValues[] = Array( $key, $value );
+        if ( trim( $value ) !== '' ) {
+          $key = self::applyFieldPatternWithIndex( $parser, 
+                                                   $frame, 
+                                                   $value, 
+                                                   $fieldSep, 
+                                                   $indexToken, 
+                                                   $index, 
+                                                   $tokens, 
+                                                   $tokenCount, 
+                                                   $pattern 
+                                                 );
+          $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+          $pairedValues[] = Array( $key, $value );
+          ++$index;
+        }
       }
     } else {
-      foreach ( $values as $value ) {
-        $key = self::applyPattern( $parser, $frame, $value, $token, $pattern );
-        $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
-        $pairedValues[] = Array( $key, $value );
+    foreach ( $values as $value ) {
+        $index = 1;
+        if ( trim( $value ) !== '' ) {
+          $key = self::applyPatternWithIndex( $parser, $frame, $value, $indexToken, $index, $token, $pattern );
+          $key = $parser->replaceVariables( ParserPower::unescape( $key ), $frame );
+          $pairedValues[] = Array( $key, $value );
+          ++$index;
+        }
       }
     }
     
@@ -1086,6 +1492,7 @@ class ParserPowerLists {
    * @param String $inList The input list.
    * @param String $template The template to use.
    * @param String $inSep The delimiter seoarating values in the input list.
+   * @param String $indexToken The token to replace with the current 1-based index of the element. Null/empty to skip.
    * @param String $token The token in the pattern that represents where the list value should go.
    * @param Array $tokens Or if there are mulitple fields, the tokens representing where they go.
    * @param String $pattern The pattern of text containing token that list values are inserted into at that token.
@@ -1098,7 +1505,8 @@ class ParserPowerLists {
                                           $frame,
                                           $values,
                                           $template,
-                                          $fieldSep,
+                                          $fieldSep, 
+                                          $indexToken,
                                           $token,
                                           $tokens,
                                           $pattern,
@@ -1109,7 +1517,15 @@ class ParserPowerLists {
     if ( $template !== '' ) {
       $pairedValues = self::generateSortKeysByTemplate( $parser, $frame, $values, $template, $fieldSep );
     } else {
-      $pairedValues = self::generateSortKeysByPattern( $parser, $frame, $values, $fieldSep, $token, $tokens, $pattern );
+      $pairedValues = self::generateSortKeysByPattern( $parser, 
+                                                       $frame, 
+                                                       $values, 
+                                                       $fieldSep, 
+                                                       $indexToken, 
+                                                       $token, 
+                                                       $tokens, 
+                                                       $pattern 
+                                                     );
     }
     
     $comparer = new ParserPowerSortKeyValueComparer( self::sortOptionsFromParam( $sortOptions, self::SORT_NUMERIC ),
@@ -1140,6 +1556,10 @@ class ParserPowerLists {
       $inSep = isset( $params["insep"] ) ? ParserPower::unescape( trim( $frame->expand( $params["insep"] ) ) ) : ',';
       $fieldSep = isset( $params["fieldsep"] ) ? 
                   ParserPower::unescape( trim( $frame->expand( $params["fieldsep"] ) ) ) : '';
+      $indexToken = isset( $params["indextoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["indextoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $token = isset( $params["token"] ) ? 
                ParserPower::unescape( trim( $frame->expand( $params["token"], 
                                       PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
@@ -1155,6 +1575,10 @@ class ParserPowerLists {
       $subsortOptions = isset( $params["subsortoptions"] ) ? trim( $frame->expand( $params["subsortoptions"] ) ) : '';
       $duplicates = isset ( $params["duplicates"] ) ? 
                     strtolower( trim( $frame->expand( $params["duplicates"] ) ) ) : 'keep';
+      $countToken = isset( $params["counttoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["counttoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
       $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
       
@@ -1169,12 +1593,13 @@ class ParserPowerLists {
         $tokens = explode( $tokenSep, $token );
       }
       
-      if ( $template !== '' || ( $token !== '' && $pattern !== '' ) ) {
+      if ( $template !== '' || ( ( $indexToken !== '' || $token !== '' ) && $pattern !== '' ) ) {
         $values = self::sortListByKeys( $parser, 
                                         $frame, 
                                         $values, 
                                         $template,
-                                        $fieldSep,
+                                        $fieldSep, 
+                                        $indexToken,
                                         $token,
                                         isset( $tokens ) ? $tokens : null,
                                         $pattern, 
@@ -1184,12 +1609,13 @@ class ParserPowerLists {
                                       );
         
       } else {
-        $values = array_filter( self::explodeList( $inSep, $inList ), "ParserPower::isEmpty" );
         $values = self::sortList( $values, $sortOptions );
       }
       
       if ( count( $values ) > 0 ) {
-        return Array( $intro . implode( $outSep, $values ) . $outro, 'noparse' => false );
+        $outList = implode( $outSep, $values );
+        $count = strval( count( $values ) );
+        return Array( self::applyIntroAndOutro( $intro, $outList, $outro, $countToken, $count ), 'noparse' => false );
       } else {
         return Array( $default, 'noparse' => false );
       }
@@ -1231,6 +1657,7 @@ class ParserPowerLists {
    * @param String $inList The input list.
    * @param String $inSep The delimiter seoarating values in the input list.
    * @param String $fieldSep The optional delimiter seoarating fields in each value.
+   * @param String $indexToken The token to replace with the current 1-based index of the element. Null/empty to skip. 
    * @param String $token The token(s) in the pattern that represents where the list value should go.
    * @param String $tokenSep The separator between tokens if used.
    * @param String $pattern The pattern of text containing token that list values are inserted into at that token.
@@ -1238,6 +1665,7 @@ class ParserPowerLists {
    * @param String $sortMode A string indicating what sort mode to use, if any.
    * @param String $sortOptions A string of options for the sort as handled by #listsort.
    * @param String $duplicates When to strip duplicate values, if at all.
+   * @param String $countToken The token to replace with the list count. Null/empty to skip.
    * @param String $intro Content to include before outputted list values, only if at least one item is output.
    * @param String $outro Content to include after outputted list values, only if at least one item is output.
    * @param String $default Content to output if no list values are.
@@ -1248,13 +1676,15 @@ class ParserPowerLists {
                                               $inList, 
                                               $inSep,
                                               $fieldSep,
+                                              $indexToken,
                                               $token, 
                                               $tokenSep,
                                               $pattern, 
                                               $outSep, 
                                               $sortMode, 
                                               $sortOptions,
-                                              $duplicates,
+                                              $duplicates, 
+                                              $countToken,
                                               $intro,
                                               $outro,
                                               $default
@@ -1264,29 +1694,45 @@ class ParserPowerLists {
       
       $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
       
-      if ( $duplicates == 'prestrip' || $duplicates == 'pre/postsort' ) {
+      if ( $duplicates === 'prestrip' || $duplicates === 'pre/poststrip' ) {
         $inValues = array_unique( $inValues );
       }
       
-      if ( $sortMode == 'presort' || $sortMode == 'pre/postsort' ) {
+      if ( ( $indexToken !== "" && $sortMode === "sort" ) || $sortMode === 'presort' || $sortMode === 'pre/postsort' ) {
         $inValues = self::sortList( $inValues, $sortOptions );
       }
       
       $outValues = Array();
+      $index = 1;
       if ( $fieldSep !== '' && $tokenSep !== '' ) {
         $tokens = explode( $tokenSep, $token );
         $tokenCount = count( $tokens );
         foreach ( $inValues as $inValue ) {
-          $outValue = self::applyFieldPattern( $parser, $frame, $inValue, $fieldSep, $tokens, $tokenCount, $pattern );
-          if ( $outValue != '' ) {
-            $outValues[] = $outValue;
+          if ( trim( $inValue ) !== '' ) {
+            $outValue = self::applyFieldPatternWithIndex( $parser, 
+                                                          $frame, 
+                                                          $inValue, 
+                                                          $fieldSep, 
+                                                          $indexToken,
+                                                          $index, 
+                                                          $tokens, 
+                                                          $tokenCount, 
+                                                          $pattern 
+                                                        );
+            if ( $outValue !== '' ) {
+              $outValues[] = $outValue;
+              ++$index;
+            }
           }
         }
       } else {
         foreach ( $inValues as $inValue ) {
-          $outValue = self::applyPattern( $parser, $frame, $inValue, $token, $pattern );
-          if ( $outValue != '' ) {
-            $outValues[] = $outValue;
+          if ( trim( $inValue ) !== '' ) {
+            $outValue = self::applyPatternWithIndex( $parser, $frame, $inValue, $indexToken, $index, $token, $pattern );
+            if ( $outValue !== '' ) {
+              $outValues[] = $outValue;
+              ++$index;
+            }
           }
         }
       }
@@ -1295,11 +1741,15 @@ class ParserPowerLists {
         $outValues = array_unique( $outValues );
       }
       
-      if ( $sortMode == 'sort' || $sortMode == 'postsort' || $sortMode == 'pre/postsort' ) {
+      if ( ( $indexToken === "" && $sortMode === "sort" ) || $sortMode == 'postsort' || $sortMode == 'pre/postsort' ) {
         $outValues = self::sortList( $outValues, $sortOptions );
       }
       
       if ( count( $outValues ) > 0 ) {
+        if ( $countToken !== null && $countToken !== "" ) {
+          $intro = str_replace( $countToken, strval( count( $outValues ) ), $intro );
+          $outro = str_replace( $countToken, strval( count( $outValues ) ), $outro );
+        }
         return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
       } else {
         return Array( $default, 'noparse' => false );
@@ -1322,6 +1772,7 @@ class ParserPowerLists {
    * @param String $sortMode A string indicating what sort mode to use, if any.
    * @param String $sortOptions A string of options for the sort as handled by #listsort.
    * @param String $duplicates When to strip duplicate values, if at all.
+   * @param String $countToken The token to replace with the list count. Null/empty to skip.
    * @param String $intro Content to include before outputted list values, only if at least one item is output.
    * @param String $outro Content to include after outputted list values, only if at least one item is output.
    * @param String $default Content to output if no list values are.
@@ -1336,7 +1787,8 @@ class ParserPowerLists {
                                                $outSep,
                                                $sortMode,
                                                $sortOptions,
-                                               $duplicates,
+                                               $duplicates, 
+                                               $countToken,
                                                $intro,
                                                $outro,
                                                $default
@@ -1367,7 +1819,9 @@ class ParserPowerLists {
       }
       
       if ( count( $outValues ) > 0 ) {
-        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+        $outList = implode( $outSep, $outValues );
+        $count = strval( count( $outValues ) );
+        return Array( self::applyIntroAndOutro( $intro, $outList, $outro, $countToken, $count ), 'noparse' => false );
       } else {
         return Array( $default, 'noparse' => false );
       }
@@ -1396,13 +1850,17 @@ class ParserPowerLists {
       $inSep = isset( $params["insep"] ) ? ParserPower::unescape( trim( $frame->expand( $params["insep"] ) ) ) : ',';
       $fieldSep = isset( $params["fieldsep"] ) ? 
                   ParserPower::unescape( trim( $frame->expand( $params["fieldsep"] ) ) ) : '';
+      $indexToken = isset( $params["indextoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["indextoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $token = isset( $params["token"] ) ? 
                ParserPower::unescape( trim( $frame->expand( $params["token"], 
                                       PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
-                                    ) : 'x';
+                                    ) : '';
       $tokenSep = isset( $params["tokensep"] ) ? 
                   ParserPower::unescape( trim( $frame->expand( $params["tokensep"] ) ) ) : ',';
-      $pattern = isset( $params["pattern"] ) ? $params["pattern"] : 'x';
+      $pattern = isset( $params["pattern"] ) ? $params["pattern"] : '';
       $outSep = isset( $params["outsep"] ) ? 
                 ParserPower::unescape( trim( $frame->expand( $params["outsep"] ) ) ) : ', ';
       $sortMode = isset ( $params["sortmode"] ) ? 
@@ -1410,6 +1868,10 @@ class ParserPowerLists {
       $sortOptions = isset( $params["sortoptions"] ) ? trim( $frame->expand( $params["sortoptions"] ) ) : '';
       $duplicates = isset ( $params["duplicates"] ) ? 
                     strtolower( trim( $frame->expand( $params["duplicates"] ) ) ) : 'keep';
+      $countToken = isset( $params["counttoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["counttoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
       $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
       
@@ -1424,6 +1886,7 @@ class ParserPowerLists {
                                           $sortMode, 
                                           $sortOptions,
                                           $duplicates,
+                                          $countToken,
                                           $intro,
                                           $outro,
                                           $default
@@ -1433,7 +1896,8 @@ class ParserPowerLists {
                                          $frame, 
                                          $inList, 
                                          $inSep, 
-                                         $fieldSep,
+                                         $fieldSep, 
+                                         $indexToken,
                                          $token, 
                                          $tokenSep,
                                          $pattern, 
@@ -1441,6 +1905,7 @@ class ParserPowerLists {
                                          $sortMode, 
                                          $sortOptions,
                                          $duplicates,
+                                         $countToken,
                                          $intro,
                                          $outro,
                                          $default
@@ -1476,12 +1941,14 @@ class ParserPowerLists {
                                        $inList, 
                                        $inSep, 
                                        '',
+                                       '',
                                        $token, 
                                        '',
                                        $pattern, 
                                        $outSep, 
                                        $sortMode, 
                                        $sortOptions,
+                                       '',
                                        '',
                                        '',
                                        '',
@@ -1666,6 +2133,7 @@ class ParserPowerLists {
    * @param String $outSep The delimiter that should separate values in the output list.
    * @param String $sortMode A string indicating what sort mode to use, if any.
    * @param String $sortOptions A string of options for the sort as handled by #listsort.
+   * @param String $countToken The token to replace with the list count. Null/empty to skip.
    * @param String $intro Content to include before outputted list values, only if at least one item is output.
    * @param String $outro Content to include after outputted list values, only if at least one item is output.
    * @param String $default Content to output if no list values are.
@@ -1684,6 +2152,7 @@ class ParserPowerLists {
                                               $outSep, 
                                               $sortMode, 
                                               $sortOptions,
+                                              $countToken,
                                               $intro,
                                               $outro,
                                               $default
@@ -1722,7 +2191,9 @@ class ParserPowerLists {
       }
       
       if ( count( $outValues ) > 0 ) {
-        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+        $outList = implode( $outSep, $outValues );
+        $count = strval( count( $outValues ) );
+        return Array( self::applyIntroAndOutro( $intro, $outList, $outro, $countToken, $count ), 'noparse' => false );
       } else {
         return Array( $default . "0 count", 'noparse' => false );
       }
@@ -1744,6 +2215,7 @@ class ParserPowerLists {
    * @param String $outSep The delimiter that should separate values in the output list.
    * @param String $sortMode A string indicating what sort mode to use, if any.
    * @param String $sortOptions A string of options for the sort as handled by #listsort.
+   * @param String $countToken The token to replace with the list count. Null/empty to skip.
    * @param String $intro Content to include before outputted list values, only if at least one item is output.
    * @param String $outro Content to include after outputted list values, only if at least one item is output.
    * @param String $default Content to output if no list values are.
@@ -1759,6 +2231,7 @@ class ParserPowerLists {
                                                $outSep,
                                                $sortMode,
                                                $sortOptions,
+                                               $countToken,
                                                $intro,
                                                $outro,
                                                $default
@@ -1785,7 +2258,9 @@ class ParserPowerLists {
                                            );
       
       if ( count( $outValues ) > 0 ) {
-        return Array( $intro . implode( $outSep, $outValues ) . $outro, 'noparse' => false );
+        $outList = implode( $outSep, $outValues );
+        $count = strval( count( $outValues ) );
+        return Array( self::applyIntroAndOutro( $intro, $outList, $outro, $countToken, $count ), 'noparse' => false );
       } else {
         return Array( $default, 'noparse' => false );
       }
@@ -1818,20 +2293,24 @@ class ParserPowerLists {
       $token1 = isset( $params["token1"] ) ? 
                 ParserPower::unescape( trim( $frame->expand( $params["token1"], 
                                        PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
-                                     ) : 'x1';
+                                     ) : '';
       $token2 = isset( $params["token2"] ) ? 
                 ParserPower::unescape( trim( $frame->expand( $params["token2"], 
                                        PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
-                                     ) : 'x2';
+                                     ) : '';
       $tokenSep = isset( $params["tokensep"] ) ? 
                   ParserPower::unescape( trim( $frame->expand( $params["tokensep"] ) ) ) : ',';
-      $matchPattern = isset( $params["matchpattern"] ) ? $params["matchpattern"] : 'x';
-      $mergePattern = isset( $params["mergepattern"] ) ? $params["mergepattern"] : 'x';
+      $matchPattern = isset( $params["matchpattern"] ) ? $params["matchpattern"] : '';
+      $mergePattern = isset( $params["mergepattern"] ) ? $params["mergepattern"] : '';
       $outSep = isset( $params["outsep"] ) ? 
                 ParserPower::unescape( trim( $frame->expand( $params["outsep"] ) ) ) : ', ';
       $sortMode = isset ( $params["sortmode"] ) ? 
                   strtolower( trim( $frame->expand( $params["sortmode"] ) ) ) : 'nosort';
       $sortOptions = isset( $params["sortoptions"] ) ? trim( $frame->expand( $params["sortoptions"] ) ) : '';
+      $countToken = isset( $params["counttoken"] ) ? 
+                    ParserPower::unescape( trim( $frame->expand( $params["counttoken"], 
+                                           PPFrame::NO_ARGS | PPFrame::NO_TEMPLATES ) ) 
+                                         ) : '';
       $intro = isset( $params["intro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["intro"] ) ) ) : '';
       $outro = isset( $params["outro"] ) ? ParserPower::unescape( trim( $frame->expand( $params["outro"] ) ) ) : '';
       
@@ -1846,6 +2325,7 @@ class ParserPowerLists {
                                           $outSep, 
                                           $sortMode, 
                                           $sortOptions,
+                                          $countToken,
                                           $intro,
                                           $outro,
                                           $default
@@ -1864,6 +2344,7 @@ class ParserPowerLists {
                                          $outSep, 
                                          $sortMode, 
                                          $sortOptions,
+                                         $countToken,
                                          $intro,
                                          $outro,
                                          $default
@@ -1874,5 +2355,3 @@ class ParserPowerLists {
     }
   }
 }
-
-?>

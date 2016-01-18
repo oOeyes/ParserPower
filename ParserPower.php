@@ -14,7 +14,10 @@
  */
 
 // If this is run directly from the web die as this is not a valid entry point.
-if( !defined( 'MEDIAWIKI' ) ) die( 'Invalid entry point.' );
+if ( !defined( 'MEDIAWIKI' ) ) {
+  echo "This is a MediaWiki extension and cannot run standalone.\n";
+  die( -1 );
+}
 
 // Extension credits.
 $wgExtensionCredits[ 'parserhook' ][] = array(
@@ -24,7 +27,7 @@ $wgExtensionCredits[ 'parserhook' ][] = array(
                       'dealing with lists of values separated by a dynamically-specified delimiter.',
   'descriptionmsg' => 'parserpower-desc',
   'author'         => '[http://www.mediawiki.org/wiki/User:OoEyes Shawn Bruckner]',
-  'version'        => '0.95',
+  'version'        => '1.0',
 );
 
 /**
@@ -37,7 +40,8 @@ $wgExtensionCredits[ 'parserhook' ][] = array(
 /**
  * Perform setup tasks.
  */
-$wgExtensionMessagesFiles['parserpower'] = dirname( __FILE__ ) . '/ParserPower.i18n.php';
+$wgMessagesDirs['parserpower'] = dirname ( __FILE__ ) . '/i18n';
+$wgExtensionMessagesFiles['ParserPowerMagic'] = dirname( __FILE__ ) . '/ParserPower.i18n.php';
 
 $wgAutoloadClasses['ParserPower'] = dirname( __FILE__ ) . '/includes/ParserPower.php';
 $wgAutoloadClasses['ParserPowerCompare'] = dirname( __FILE__ ) . '/includes/ParserPowerCompare.php';
@@ -47,5 +51,3 @@ $wgAutoloadClasses['ParserPowerSimple'] = dirname( __FILE__ ) . '/includes/Parse
 $wgAutoloadClasses['ParserPowerLists'] = dirname( __FILE__ ) . '/includes/ParserPowerLists.php';
 
 $wgHooks['ParserFirstCallInit'][] = 'ParserPower::setup';
-
-?>

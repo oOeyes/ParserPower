@@ -70,6 +70,9 @@ class ParserPower {
           case "\\}":    $output .= "}";         break;
           case "\\(":    $output .= "[";         break;
           case "\\)":    $output .= "]";         break;
+          case "\\l":    $output .= "<";         break;
+          case "\\g":    $output .= ">";         break;
+          case "\\e":    $output .= "=";         break;
           case "\\!":    $output .= "|";         break;
           case "\\0":    $output .= "";          break;
           default:       $output .= $sequence;   break;
@@ -101,8 +104,11 @@ class ParserPower {
             case "\\\\":   $output .= "\\\\\\\\";   $i += 1;   break;
             case "\\{":    $output .= "\\\\{";      $i += 1;   break;
             case "\\}":    $output .= "\\\\}";      $i += 1;   break;
-            case "\\(":    $output .= "\\\\[";      $i += 1;   break;
-            case "\\)":    $output .= "\\\\]";      $i += 1;   break;
+            case "\\(":    $output .= "\\\\(";      $i += 1;   break;
+            case "\\)":    $output .= "\\\\)";      $i += 1;   break;
+            case "\\l":    $output .= "\\\\l";      $i += 1;   break;
+            case "\\g":    $output .= "\\\\g";      $i += 1;   break;
+            case "\\e":    $output .= "\\\\e";      $i += 1;   break;
             case "\\!":    $output .= "\\\\!";      $i += 1;   break;
             case "\\0":    $output .= "\\\\0";      $i += 1;   break;
             default:       $output .= "\\\\";                  break;
@@ -114,6 +120,9 @@ class ParserPower {
         case "}":    $output .= "\\}";   break;
         case "[":    $output .= "\\(";   break;
         case "]":    $output .= "\\)";   break;
+        case "<":    $output .= "\\l";   break;
+        case ">":    $output .= "\\g";   break;
+        case "=":    $output .= "\\e";   break;
         case "|":    $output .= "\\!";   break;
         default:     $output .= $char;   break;
       }
@@ -121,6 +130,119 @@ class ParserPower {
     
     return $output;
   }
+  
+  /**
+   * Replaces the indicated token in the pattern with the input value.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters.
+   * @param String $token The token to replace.
+   * @param String $pattern Pattern containing token to be replaced with the input value.
+   * @return The result of the token replacement within the pattern.
+   */
+  static public function applyPattern( $parser, $frame, $inValue, $token, $pattern ) {
+    return self::applyPatternWithIndex( $parser, $frame, $inValue, '', 0, $token, $pattern );
+  }
+  
+  /**
+   * Replaces the indicated index token in the pattern with the given index and the token in the pattern with the input
+   * value.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters.
+   * @param int $indexToken The token to replace with the index, or a null or empty value to skip index replacement.
+   * @param int $index The numeric index of this value.
+   * @param String $token The token to replace.
+   * @param String $pattern Pattern containing token to be replaced with the input value.
+   * @return The result of the token replacement within the pattern.
+   */
+  static public function applyPatternWithIndex( $parser, $frame, $inValue, $indexToken, $index, $token, $pattern ) {
+    $inValue = trim( $inValue );
+    if ( trim( $pattern ) !== '' ) { 
+      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
+      if ( $indexToken !== null && $indexToken !== "" ) {
+        $outValue = str_replace( $indexToken, strval( $index ), $outValue );
+      }
+      if ( $token !== null && $token !== '' ) {
+        $outValue = str_replace( $token, $inValue, $outValue );
+      }
+    } else {
+      $outValue = $inValue;
+    }
+    $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
+    return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
+  }
+  
+  /**
+   * Breaks the input value into fields and then replaces the indicated tokens in the pattern with those field values.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters
+   * @param String $fieldSep The delimiter separating the fields in the value.
+   * @param Array $tokens The list of tokens to replace.
+   * @param int $tokenCount The number of tokens.
+   * @param String $pattern Pattern containing tokens to be replaced by field values.
+   * @return The result of the token replacement within the pattern.
+   */
+  static public function applyFieldPattern( $parser, 
+                                            $frame, 
+                                            $inValue,
+                                            $fieldSep,
+                                            $tokens, 
+                                            $tokenCount, 
+                                            $pattern 
+                                          ) {
+    return self::applyFieldPatternWithIndex( $parser, 
+                                             $frame, 
+                                             $inValue, 
+                                             $fieldSep, 
+                                             '', 
+                                             0,
+                                             $tokens, 
+                                             $tokenCount, 
+                                             $pattern
+                                           );
+  }
+  
+  /**
+   * Replaces the index token with the given index, and then breaks the input value into fields and then replaces the 
+   * indicated tokens in the pattern with those field values.
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $inValue The value to change into one or more template parameters
+   * @param String $fieldSep The delimiter separating the fields in the value.
+   * @param int $indexToken The token to replace with the index, or a null or empty value to skip index replacement.
+   * @param int $index The numeric index of this value.
+   * @param Array $tokens The list of tokens to replace.
+   * @param int $tokenCount The number of tokens.
+   * @param String $pattern Pattern containing tokens to be replaced by field values.
+   * @return The result of the token replacement within the pattern.
+   */
+  static public function applyFieldPatternWithIndex( $parser, 
+                                                     $frame, 
+                                                     $inValue,
+                                                     $fieldSep,
+                                                     $indexToken,
+                                                     $index,
+                                                     $tokens, 
+                                                     $tokenCount, 
+                                                     $pattern 
+                                                   ) {
+    $inValue = trim( $inValue );
+    if ( trim( $pattern ) !== '' ) { 
+      $outValue = $frame->expand( $pattern, PPFrame::NO_ARGS || PPFrame::NO_TEMPLATES );
+      if ( $indexToken !== null && $indexToken !== "" ) {
+        $outValue = str_replace( $indexToken, strval( $index ), $outValue );
+      }
+      $fields = explode( $fieldSep, $inValue, $tokenCount );
+      $fieldCount = count( $fields );
+      for ( $i = 0; $i < $tokenCount; $i++ ) {
+        $outValue = str_replace( $tokens[$i], ( $i < $fieldCount ) ? $fields[$i] : '', $outValue );
+      }
+    } else {
+      $outValue = $inValue;
+    }
+    $outValue = $parser->preprocessToDom( $outValue, $frame->isTemplate() ? Parser::PTD_FOR_INCLUSION : 0 );
+    return ParserPower::unescape( trim( $frame->expand( $outValue ) ) );
+  }
 }
-
-?>

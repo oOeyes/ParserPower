@@ -1,28 +1,32 @@
 <?php
 
 /**
- * Internationalization file.  Only contains English for now.
+ * Magic words.
  *
  * @author Eyes <eyes@aeongarden.com>
  * @copyright Copyright � 2011 Eyes
  * @license http://www.gnu.org/copyleft/gpl.html GNU General Public License 2.0 or later
  */
- 
-$messages = Array();
-$messages['en'] = Array(
-  'parserpower-desc'      => 'A collection of extended parser functions for MediaWiki, particularly including ' .
-                             'functions for dealing with lists of values separated by a dynamically-specified ' . 
-                             'delimiter.',
-);
 
 $magicWords = Array();
 $magicWords['en'] = Array(
   'trim'                => Array( 0, 'trim' ),
   'uesc'                => Array( 0, 'uesc' ),
+  'uescnowiki'          => Array( 0, 'uescnowiki' ),
   'trimuesc'            => Array( 0, 'trimuesc' ),
+  'ueif'                => Array( 0, 'ueif' ),
+  'or'                  => Array( 0, 'or' ),
+  'ueifeq'              => Array( 0, 'ueifeq' ),
+  'token'               => Array( 0, 'token' ),
+  'tokenif'             => Array( 0, 'tokenif' ),
+  'ueswitch'            => Array( 0, 'ueswitch' ),
+  'follow'              => Array( 0, 'follow' ),
   'lstcnt'              => Array( 0, 'lstcnt' ),
   'lstsep'              => Array( 0, 'lstsep' ),
+  'lstelem'             => Array( 0, 'lstelem' ),
+  'lstsub'              => Array( 0, 'lstsub' ),
   'lstfnd'              => Array( 0, 'lstfnd' ),
+  'lstind'              => Array( 0, 'lstind' ),
   'lstapp'              => Array( 0, 'lstapp' ),
   'lstprep'             => Array( 0, 'lstprep' ),
   'lstjoin'             => Array( 0, 'lstjoin' ),
@@ -39,4 +43,3 @@ $magicWords['en'] = Array(
   'lstmaptemp'          => Array( 0, 'lstmaptemp' ),
   'listmerge'           => Array( 0, 'listmerge' ),
 );
-?>
