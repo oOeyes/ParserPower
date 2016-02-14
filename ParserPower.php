@@ -27,7 +27,7 @@ $wgExtensionCredits[ 'parserhook' ][] = array(
                       'dealing with lists of values separated by a dynamically-specified delimiter.',
   'descriptionmsg' => 'parserpower-desc',
   'author'         => '[http://www.mediawiki.org/wiki/User:OoEyes Shawn Bruckner]',
-  'version'        => '1.0',
+  'version'        => '1.0.1',
 );
 
 /**

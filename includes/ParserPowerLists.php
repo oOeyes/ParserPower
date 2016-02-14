@@ -1988,6 +1988,7 @@ class ParserPowerLists {
                                         '',
                                         '',
                                         '',
+                                        '',
                                         ''
                                       );
     } else {
@@ -2351,7 +2352,7 @@ class ParserPowerLists {
                                        );
       }
     } else {
-      return Array( $default . "not called", 'noparse' => false );
+      return Array( $default, 'noparse' => false );
     }
   }
 }
