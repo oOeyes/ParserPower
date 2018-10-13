@@ -730,7 +730,7 @@ class ParserPowerLists {
       return $parser->replaceVariables( implode( '', $outValue ), $frame );
     }
   }
-  
+
   /**
    * This function performs the filtering operation for the listfiler function when done by value inclusion.
    * @param Parser $parser The parser object.
@@ -739,33 +739,11 @@ class ParserPowerLists {
    * @param String $values The list of values to include, not yet exploded.
    * @param String $valueSep The delimiter separating the values to include.
    * @param bool $valueCS true to match in a case-sensitive manner, false to match in a case-insensitive manner
+   * @param bool $valueRE true to match based on a regex, false to match exactly
    * @return Array The function output along with relevant parser options.
    */
-  static private function filterListByInclusion( $inValues, $values, $valueSep, $valueCS ) {
-      if ( $valueSep !== '' ) {
-        $includeValues = self::arrayTrimUnescape( self::explodeList( $valueSep, $values ) );
-      } else {
-        $includeValues = Array( ParserPower::unescape( trim( $values ) ) );
-      }
-      
-      $outValues = Array();
-      
-      if ( $valueCS ) {
-        foreach ( $inValues as $inValue ) {
-          if ( in_array( $inValue, $includeValues ) === true ) {
-            $outValues[] = $inValue;
-          }
-        }
-      } else {
-        $includeValues = array_map( 'strtolower', $includeValues );
-        foreach ( $inValues as $inValue ) {
-          if ( in_array( strtolower( $inValue ), $includeValues ) === true ) {
-            $outValues[] = $inValue;
-          }
-        }
-      }
-      
-      return $outValues;
+  static private function filterListByInclusion( $inValues, $values, $valueSep, $valueCS, $valueRE = 'no' ) {
+    return self::filterListByInclusionOrExclusion( 'include', $inValues, $values, $valueSep, $valueCS, $valueRE );
   }
   
   /**
@@ -776,33 +754,68 @@ class ParserPowerLists {
    * @param String $values The list of values to exclude, not yet exploded.
    * @param String $valueSep The delimiter separating the values to exclude.
    * @param bool $valueCS true to match in a case-sensitive manner, false to match in a case-insensitive manner
+   * @param bool $valueRE true to match based on a regex, false to match exactly
    * @return Array The function output along with relevant parser options.
    */
-  static private function filterListByExclusion( $inValues, $inSep, $values, $valueSep, $valueCS ) {
-    if ( $valueSep !== '' ) {
-      $excludeValues = self::arrayTrimUnescape( self::explodeList( $valueSep, $values ) );
-    } else {
-      $excludeValues = Array( ParserPower::unescape( trim( $values ) ) );
-    }
+  static private function filterListByExclusion( $inValues, $values, $valueSep, $valueCS, $valueRE = 'no' ) {
+    return self::filterListByInclusionOrExclusion( 'exclude', $inValues, $values, $valueSep, $valueCS, $valueRE );
+  }
+  
+  /**
+   * This function performs the filtering operation for the listfiler function by either inclusion or exclusion
+   * @param Parser $parser The parser object.
+   * @param PPFrame $frame The parser frame object.
+   * @param String $method How to filter the values; "include" or "exclude".
+   * @param Array $inValues Array with the input values.
+   * @param String $values The list of values to include or exclude, not yet exploded.
+   * @param String $valueSep The delimiter separating the values to include/exclude.
+   * @param bool $valueCS true to match in a case-sensitive manner, false to match in a case-insensitive manner
+   * @param bool $valueRE true to match based on a regex, false to match exactly
+   * @return Array The function output along with relevant parser options.
+   */
+  static private function filterListByInclusionOrExclusion( $method, $inValues, $values, $valueSep, $valueCS, $valueRE ) {
+      $equality_val = $method === 'include' ? true : false;
 
-    $outValues = Array();
+      if ( $valueRE !== 'no' ) {
+        $valueSep = '';
+      }
 
-    if ( $valueCS ) {
-      foreach ( $inValues as $inValue ) {
-        if ( in_array( $inValue, $excludeValues ) === false ) {
-          $outValues[] = $inValue;
+      if ( $valueSep !== '' ) {
+        $ieValues = self::arrayTrimUnescape( self::explodeList( $valueSep, $values ) );
+      } else {
+        $ieValues = Array( ParserPower::unescape( trim( $values ) ) );
+      }
+
+      $outValues = Array();
+
+      if ( $valueRE !== 'no' ) {
+        $pattern = sprintf( '/%s/%s', $ieValues[0], $valueCS ? '' : 'i' );
+        foreach ( $inValues as $inValue ) {
+          if ( preg_match( $pattern, $inValue ) === intval( $equality_val ) ) {
+            if ( $equality_val === true && $valueRE === 'strip' ) {
+              $inValue = preg_replace( $pattern, '', $inValue );
+            }
+            $outValues[] = $inValue;
+          }
+        }
+      } else {
+        if ( $valueCS ) {
+          foreach ( $inValues as $inValue ) {
+            if ( in_array( $inValue, $ieValues ) === $equality_val ) {
+              $outValues[] = $inValue;
+            }
+          }
+        } else {
+          $ieValues = array_map( 'strtolower', $ieValues );
+          foreach ( $inValues as $inValue ) {
+            if ( in_array( strtolower( $inValue ), $ieValues ) === $equality_val ) {
+              $outValues[] = $inValue;
+            }
+          }
         }
       }
-    } else {
-      $excludeValues = array_map( 'strtolower', $excludeValues );
-      foreach ( $inValues as $inValue ) {
-        if ( in_array( strtolower( $inValue ), $excludeValues ) === false ) {
-          $outValues[] = $inValue;
-        }
-      }
-    }
-
-    return $outValues; 
+      
+      return $outValues;
   }
   
   /**
@@ -904,11 +917,13 @@ class ParserPowerLists {
     
     if ( $inList !== '' ) {
       $keepValues = isset( $params["keep"] ) ? trim( $frame->expand( $params["keep"] ) ) : '';
+      $keepRE = isset( $params["keepre"] ) ? trim( $frame->expand( $params["keepre"] ) ) : 'no';
       $keepSep = isset( $params["keepsep"] ) ? trim( $frame->expand( $params["keepsep"] ) ) : ',';
       $keepCS = isset( $params["keepcs"] ) ? 
                 strtolower( trim( $frame->expand( $params["keepcs"] ) ) ) : 
                 'no';
       $removeValues = isset( $params["remove"] ) ? trim( $frame->expand( $params["remove"] ) ) : '';
+      $removeRE = isset( $params["removere"] ) ? trim( $frame->expand( $params["removere"] ) ) : 'no';
       $removeSep = isset( $params["removesep"] ) ? trim( $frame->expand( $params["removesep"] ) ) : ',';
       $removeCS = isset( $params["removecs"] ) ? 
                   strtolower( trim( $frame->expand( $params["removecs"] ) ) ) : 
@@ -941,18 +956,20 @@ class ParserPowerLists {
       $tokenSep = $parser->mStripState->unstripNoWiki( $tokenSep );
       
       $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
-      
+
       if ( $keepValues !== '' ) {
         $outValues = self::filterListByInclusion( $inValues, 
                                                   $keepValues, 
                                                   $keepSep, 
-                                                  ( $keepCS === "yes" )
+                                                  ( $keepCS === "yes" ),
+                                                  $keepRE
                                                 );
       } else if ( $removeValues !== '' ) {
         $outValues = self::filterListByExclusion( $inValues,
                                                   $removeValues, 
                                                   $removeSep, 
-                                                  ( $removeCS === "yes" )
+                                                  ( $removeCS === "yes" ),
+                                                  $removeRE
                                                 );
       } else if ( $template !== '' ) {
         $outValues = self::filterFromListByTemplate( $parser, $frame, $inValues, $template, $fieldSep );
@@ -1046,7 +1063,6 @@ class ParserPowerLists {
       $inValues = self::arrayTrimUnescape( self::explodeList( $inSep, $inList ) );
       
       $outValues = self::filterListByExclusion( $inValues, 
-                                                $inSep, 
                                                 $value, 
                                                 '', 
                                                 ( $csOption === "cs" )
