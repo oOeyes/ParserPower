@@ -1,5 +1,7 @@
 # Windows image file caches
+vendor
 Thumbs.db
+composer.lock
 ehthumbs.db
 
 # Folder config file
@@ -41,3 +43,7 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Project files to ignore
+vendor
+composer.lock
